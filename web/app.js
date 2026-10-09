@@ -328,7 +328,7 @@
     const dark = pref === 'dark' || (pref === 'auto' && media && media.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const meta = $('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? '#16223f' : '#1e5eff';
+    if (meta) meta.content = dark ? '#0b0b1d' : '#eef0ff';
   }
   if (media && media.addEventListener) media.addEventListener('change', applyTheme);
 
