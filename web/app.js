@@ -37,14 +37,26 @@
   /* Data                                                                */
   /* ------------------------------------------------------------------ */
 
-  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32 };
+  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32, teamScoring: 'sum', teamTopN: 3 };
+  const TEAM_COLORS = ['#6c4dff', '#ff4d8d', '#12b886', '#ff9f1c', '#2ec5ff', '#f03e3e', '#3b82f6', '#be4bdb', '#40c057', '#fab005', '#15aabf', '#495057'];
+  // Färgord i lagnamnet styr färgen, t.ex. "Lag Röd" blir rött
+  const NAMED_COLORS = [
+    [/röd|röda|red/i, '#f03e3e'], [/blå|blue/i, '#3b82f6'], [/grön|gröna|green/i, '#40c057'], [/gul|gula|yellow/i, '#fab005'],
+    [/orange/i, '#ff9f1c'], [/lila|purple/i, '#be4bdb'], [/rosa|pink/i, '#ff4d8d'], [/turkos/i, '#15aabf'], [/svart|black/i, '#495057'],
+  ];
+  function colorForTeam(name, index) {
+    const hit = NAMED_COLORS.find(([re]) => re.test(name));
+    return hit ? hit[1] : TEAM_COLORS[index % TEAM_COLORS.length];
+  }
 
-  function newTournament(name) {
+  function newTournament(name, mode) {
     return {
       id: L.uid(),
       name: name,
+      mode: mode === 'team' ? 'team' : 'individual',
       createdAt: Date.now(),
       players: [],
+      teams: [],
       rounds: [],
       settings: Object.assign({}, DEFAULT_SETTINGS),
       playoff: null,
@@ -57,7 +69,16 @@
     t.rounds.forEach((r) => (r.scores = r.scores || {}));
     t.settings = Object.assign({}, DEFAULT_SETTINGS, t.settings || {});
     if (t.playoff === undefined) t.playoff = null;
+    if (t.playoff && !t.playoff.kind) t.playoff.kind = 'player';
     if (!t.name) t.name = 'Turnering';
+    if (t.mode !== 'team') t.mode = 'individual';
+    t.teams = Array.isArray(t.teams) ? t.teams : [];
+    // Äldre versioner hade ett fritt "klubb"-fält – gör om det till lag
+    t.players.forEach((p) => {
+      if (p.club && !p.teamId) p.teamId = ensureTeam(t, p.club).id;
+      delete p.club;
+      if (p.teamId && !t.teams.some((x) => x.id === p.teamId)) delete p.teamId;
+    });
     return t;
   }
 
@@ -98,16 +119,18 @@
     }
   }
 
-  const ui = { tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false };
+  const ui = { tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
     if (saved.tab) ui.tab = saved.tab;
     if (saved.roundId) ui.roundId = saved.roundId;
     if (saved.pointsSort) ui.pointsSort = saved.pointsSort;
+    if (saved.playersView) ui.playersView = saved.playersView;
+    if (saved.tableView) ui.tableView = saved.tableView;
   } catch (e) { /* ignorera */ }
   function saveUi() {
     try {
-      localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, roundId: ui.roundId, pointsSort: ui.pointsSort }));
+      localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, roundId: ui.roundId, pointsSort: ui.pointsSort, playersView: ui.playersView, tableView: ui.tableView }));
     } catch (e) { /* ignorera */ }
   }
 
@@ -131,10 +154,36 @@
   }
 
   const playerById = (t, id) => t.players.find((p) => p.id === id);
+  const teamById = (t, id) => (t.teams || []).find((x) => x.id === id);
   const pname = (t, id) => {
-    const p = playerById(t, id);
+    const p = playerById(t, id) || teamById(t, id);
     return p ? p.name : '(borttagen)';
   };
+  const isTeamMode = (t) => t.mode === 'team';
+  // Lag inom en individuell turnering (lagtävling)
+  const hasTeams = (t) => !isTeamMode(t) && t.teams.length > 0;
+  // Ord som skiljer sig mellan individuell turnering och lagturnering
+  const W = (t) =>
+    isTeamMode(t)
+      ? { one: 'lag', One: 'Lag', def: 'laget', defs: 'lagen' }
+      : { one: 'spelare', One: 'Spelare', def: 'spelaren', defs: 'spelarna' };
+
+  function ensureTeam(t, name) {
+    name = String(name).trim().replace(/\s+/g, ' ');
+    let team = t.teams.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (!team) {
+      team = { id: L.uid(), name: name, color: colorForTeam(name, t.teams.length) };
+      t.teams.push(team);
+    }
+    return team;
+  }
+
+  function teamTag(t, p) {
+    if (isTeamMode(t)) return p.members && p.members.length ? `<div class="sub">${esc(p.members.join(', '))}</div>` : '';
+    const team = p.teamId && teamById(t, p.teamId);
+    return team ? `<div class="sub"><span class="team-tag"><i style="background:${esc(team.color)}"></i>${esc(team.name)}</span></div>` : '';
+  }
+  const teamDot = (team) => `<i class="team-dot" style="background:${esc(team.color)}"></i>`;
 
   function fmt(n) {
     if (n == null || !isFinite(n)) return '–';
@@ -146,6 +195,12 @@
     const end = (n % 10 === 1 || n % 10 === 2) && n % 100 !== 11 && n % 100 !== 12 ? 'a' : 'e';
     return n + ':' + end;
   }
+
+  const splitNames = (str) =>
+    String(str || '')
+      .split(/[\n,;]+/)
+      .map((x) => x.trim().replace(/\s+/g, ' '))
+      .filter(Boolean);
 
   function parseNum(str) {
     const s = String(str).trim().replace(',', '.').replace('−', '-');
@@ -345,6 +400,7 @@
     $('#tName').textContent = t.name;
     document.title = t.name + ' – Turnering';
     $$('#tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === ui.tab));
+    $('#tabbar [data-tab="players"] span').textContent = W(t).One;
     document.body.classList.toggle('big', ui.big);
     const view = $('#view');
     view.className = 'view view-' + ui.tab;
@@ -374,25 +430,36 @@
 
   /* ---------------------------- Spelare ----------------------------- */
 
+  function playersSeg(t) {
+    if (isTeamMode(t)) return '';
+    return `<div class="seg top-seg">
+      <button data-action="pview" data-v="players" class="${ui.playersView !== 'teams' ? 'on' : ''}">Spelare (${t.players.length})</button>
+      <button data-action="pview" data-v="teams" class="${ui.playersView === 'teams' ? 'on' : ''}">Lag (${t.teams.length})</button>
+    </div>`;
+  }
+
   function renderPlayers(view, t) {
+    if (!isTeamMode(t) && ui.playersView === 'teams') return renderTeams(view, t);
+    const w = W(t);
     const active = t.players.filter((p) => p.active !== false).length;
     view.innerHTML = `
+      ${playersSeg(t)}
       <section class="card">
         <form class="add-row" id="addForm" autocomplete="off">
-          <input type="text" id="newPlayer" placeholder="Namn på ny spelare" enterkeyhint="done" maxlength="60">
+          <input type="text" id="newPlayer" placeholder="Namn på ${isTeamMode(t) ? 'nytt lag' : 'ny spelare'}" enterkeyhint="done" maxlength="60">
           <button class="btn primary" type="submit">${icon('add')}Lägg till</button>
         </form>
         <div class="row wrap" style="margin-top:10px">
           <button class="btn small ghost" data-action="bulk">Lägg till flera</button>
-          <button class="btn small ghost" data-action="shufflePick">${icon('dice')}Slumpa spelare</button>
+          <button class="btn small ghost" data-action="shufflePick">${icon('dice')}Slumpa ${w.one}</button>
         </div>
       </section>
       ${t.players.length ? `
       <div class="list-head">
         <span class="count">${active} aktiva${active !== t.players.length ? ` / ${t.players.length}` : ''}</span>
-        <input type="search" id="playerSearch" placeholder="Sök spelare" value="${esc(ui.playerSearch)}">
+        <input type="search" id="playerSearch" placeholder="Sök ${w.one}" value="${esc(ui.playerSearch)}">
       </div>
-      <ul class="list" id="playerList"></ul>` : emptyState('people', 'Inga spelare än', 'Skriv in namn ovan, eller lägg till många på en gång.', 'Lägg till flera', 'bulk')}
+      <ul class="list" id="playerList"></ul>` : emptyState('people', `Inga ${w.one} än`, isTeamMode(t) ? 'Skriv in lagnamn ovan. Medlemmar kan läggas till per lag.' : 'Skriv in namn ovan, eller lägg till många på en gång.', 'Lägg till flera', 'bulk')}
     `;
     fillPlayerList(t);
 
@@ -405,7 +472,7 @@
         toast(`"${name}" finns redan`);
         return;
       }
-      t.players.push({ id: L.uid(), name: name, club: '', active: true });
+      t.players.push(isTeamMode(t) ? { id: L.uid(), name: name, members: [], active: true } : { id: L.uid(), name: name, active: true });
       save();
       render();
       toast(`${name} tillagd`);
@@ -421,13 +488,17 @@
       const a = e.target.closest('[data-action]');
       if (!a) return;
       const id = a.dataset.id;
-      if (a.dataset.action === 'bulk') bulkAddDialog(t);
+      if (a.dataset.action === 'pview') {
+        ui.playersView = a.dataset.v;
+        saveUi();
+        render();
+      } else if (a.dataset.action === 'bulk') bulkAddDialog(t);
       else if (a.dataset.action === 'shufflePick') randomPlayerDialog(t);
       else if (a.dataset.action === 'edit') editPlayerDialog(t, id);
       else if (a.dataset.action === 'toggle') {
         const p = playerById(t, id);
         p.active = p.active === false;
-        commit(p.active ? `${p.name} är aktiv igen` : `${p.name} är inaktiv (räknas inte i tabellen)`);
+        commit(p.active ? `${p.name} är aktiv${isTeamMode(t) ? 't' : ''} igen` : `${p.name} är inaktiv${isTeamMode(t) ? 't' : ''} (räknas inte i tabellen)`);
       }
     };
   }
@@ -438,7 +509,11 @@
     const q = ui.playerSearch.trim().toLowerCase();
     const list = t.players
       .map((p, i) => ({ p: p, i: i }))
-      .filter((x) => !q || x.p.name.toLowerCase().includes(q) || (x.p.club || '').toLowerCase().includes(q));
+      .filter((x) => {
+        if (!q) return true;
+        const team = x.p.teamId && teamById(t, x.p.teamId);
+        return x.p.name.toLowerCase().includes(q) || (team && team.name.toLowerCase().includes(q)) || (x.p.members || []).some((m) => m.toLowerCase().includes(q));
+      });
     ul.innerHTML = list.length
       ? list
           .map(
@@ -447,21 +522,25 @@
           <span class="num">${i + 1}</span>
           <div class="grow tap" data-action="edit" data-id="${p.id}">
             <div class="name">${esc(p.name)}</div>
-            ${p.club ? `<div class="sub">${esc(p.club)}</div>` : ''}
+            ${teamTag(t, p)}
           </div>
           <label class="check" title="Aktiv"><input type="checkbox" data-action="toggle" data-id="${p.id}" ${p.active !== false ? 'checked' : ''}></label>
           <button class="icon-btn" data-action="edit" data-id="${p.id}" aria-label="Redigera">${icon('edit')}</button>
         </li>`
           )
           .join('')
-      : `<li class="muted">Ingen spelare matchar sökningen</li>`;
+      : `<li class="muted">Inget matchar sökningen</li>`;
   }
 
   function bulkAddDialog(t) {
+    const team = isTeamMode(t);
     openModal({
-      title: 'Lägg till flera spelare',
-      body: `<p class="muted small">Ett namn per rad. Lägg till klubb/lag efter ett kommatecken, t.ex. <i>Anna Svensson, IFK</i>.</p>
-             <textarea id="bulkText" placeholder="Anna Svensson&#10;Erik Johansson, BK Ross&#10;…" autofocus></textarea>`,
+      title: team ? 'Lägg till flera lag' : 'Lägg till flera spelare',
+      body: team
+        ? `<p class="muted small">Ett lag per rad. Skriv medlemmar efter ett kolon, t.ex. <i>Lag Röd: Anna, Erik, Sara</i>.</p>
+             <textarea id="bulkText" placeholder="Lag Röd: Anna, Erik&#10;Lag Blå: Sara, Johan&#10;…" autofocus></textarea>`
+        : `<p class="muted small">Ett namn per rad. Lägg till lag efter ett kommatecken, t.ex. <i>Anna Svensson, Lag Röd</i> – laget skapas automatiskt.</p>
+             <textarea id="bulkText" placeholder="Anna Svensson&#10;Erik Johansson, Lag Röd&#10;…" autofocus></textarea>`,
       actions: [
         { label: 'Avbryt' },
         {
@@ -473,19 +552,30 @@
             let added = 0;
             let dup = 0;
             lines.forEach((line) => {
-              const parts = line.split(/[,;\t]/);
-              const name = (parts[0] || '').trim().replace(/\s+/g, ' ');
-              const club = parts.slice(1).join(' ').trim();
+              let name;
+              let extra = '';
+              if (team) {
+                const i = line.indexOf(':');
+                name = (i >= 0 ? line.slice(0, i) : line).trim().replace(/\s+/g, ' ');
+                extra = i >= 0 ? line.slice(i + 1) : '';
+              } else {
+                const parts = line.split(/[,;\t]/);
+                name = (parts[0] || '').trim().replace(/\s+/g, ' ');
+                extra = parts.slice(1).join(' ').trim();
+              }
               if (!name) return;
               if (existing.has(name.toLowerCase())) {
                 dup++;
                 return;
               }
               existing.add(name.toLowerCase());
-              t.players.push({ id: L.uid(), name: name, club: club, active: true });
+              const p = { id: L.uid(), name: name, active: true };
+              if (team) p.members = splitNames(extra);
+              else if (extra) p.teamId = ensureTeam(t, extra).id;
+              t.players.push(p);
               added++;
             });
-            commit(`${added} spelare tillagda` + (dup ? ` (${dup} dubbletter hoppades över)` : ''));
+            commit(`${added} ${team ? 'lag' : 'spelare'} tillagda` + (dup ? ` (${dup} dubbletter hoppades över)` : ''));
           },
         },
       ],
@@ -496,13 +586,24 @@
     const p = playerById(t, id);
     if (!p) return;
     const inPlayoff = t.playoff && t.playoff.seeds.includes(id);
+    const team = isTeamMode(t);
+    const extraField = team
+      ? `<label class="field"><span>Medlemmar (en per rad)</span><textarea id="epMembers" style="min-height:110px">${esc((p.members || []).join('\n'))}</textarea></label>`
+      : `<label class="field"><span>Lag</span>
+          <select id="epTeam">
+            <option value="">Inget lag</option>
+            ${t.teams.map((x) => `<option value="${x.id}" ${p.teamId === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}
+            <option value="__new">+ Nytt lag…</option>
+          </select>
+        </label>
+        <label class="field" id="epNewTeamWrap" hidden><span>Namn på nytt lag</span><input type="text" id="epNewTeam" maxlength="60"></label>`;
     openModal({
-      title: 'Redigera spelare',
+      title: team ? 'Redigera lag' : 'Redigera spelare',
       body: `
         <label class="field"><span>Namn</span><input type="text" id="epName" value="${esc(p.name)}" maxlength="60"></label>
-        <label class="field"><span>Klubb / lag (valfritt)</span><input type="text" id="epClub" value="${esc(p.club || '')}" maxlength="60"></label>
+        ${extraField}
         <label class="check"><input type="checkbox" id="epActive" ${p.active !== false ? 'checked' : ''}> Aktiv (räknas i tabellen)</label>
-        <button class="btn danger-text ghost block" id="epDelete" style="margin-top:10px">${icon('del')}Ta bort spelare</button>`,
+        <button class="btn danger-text ghost block" id="epDelete" style="margin-top:10px">${icon('del')}Ta bort ${team ? 'lag' : 'spelare'}</button>`,
       actions: [
         { label: 'Avbryt' },
         {
@@ -516,18 +617,32 @@
               return false;
             }
             p.name = name;
-            p.club = $('#epClub', w).value.trim();
+            if (team) p.members = splitNames($('#epMembers', w).value);
+            else {
+              const sel = $('#epTeam', w).value;
+              if (sel === '__new') {
+                const nn = $('#epNewTeam', w).value.trim();
+                if (!nn) {
+                  toast('Skriv ett namn på det nya laget');
+                  return false;
+                }
+                p.teamId = ensureTeam(t, nn).id;
+              } else if (sel) p.teamId = sel;
+              else delete p.teamId;
+            }
             p.active = $('#epActive', w).checked;
             commit('Sparat');
           },
         },
       ],
       onOpen: (w, close) => {
+        const sel = $('#epTeam', w);
+        if (sel) sel.onchange = () => ($('#epNewTeamWrap', w).hidden = sel.value !== '__new');
         $('#epDelete', w).onclick = () => {
           close();
           confirmDialog(
-            'Ta bort spelare?',
-            `${p.name} och alla hens poäng tas bort.` + (inPlayoff ? ' Spelaren finns också i slutspelet.' : ''),
+            team ? 'Ta bort lag?' : 'Ta bort spelare?',
+            `${p.name} och alla ${team ? 'lagets' : 'hens'} poäng tas bort.` + (inPlayoff ? ` ${team ? 'Laget' : 'Spelaren'} finns också i slutspelet.` : ''),
             'Ta bort',
             () => {
               checkpoint();
@@ -544,12 +659,12 @@
   function randomPlayerDialog(t) {
     const pool = t.players.filter((p) => p.active !== false);
     if (!pool.length) {
-      toast('Inga aktiva spelare');
+      toast(`Inga aktiva ${W(t).one}`);
       return;
     }
     const pick = () => pool[Math.floor(Math.random() * pool.length)].name;
     openModal({
-      title: 'Slumpa spelare',
+      title: `Slumpa ${W(t).one}`,
       body: `<div class="random-name" id="rndName">${esc(pick())}</div>`,
       actions: [
         { label: 'Stäng' },
@@ -570,12 +685,218 @@
     });
   }
 
+  /* ------------------------------- Lag ------------------------------- */
+
+  function renderTeams(view, t) {
+    const unassigned = t.players.filter((p) => p.active !== false && !(p.teamId && teamById(t, p.teamId))).length;
+    view.innerHTML = `
+      ${playersSeg(t)}
+      <section class="card">
+        <form class="add-row" id="addTeamForm" autocomplete="off">
+          <input type="text" id="newTeam" placeholder="Namn på nytt lag" enterkeyhint="done" maxlength="60">
+          <button class="btn primary" type="submit">${icon('add')}Lägg till</button>
+        </form>
+        <div class="row wrap" style="margin-top:10px">
+          <button class="btn small ghost" data-action="autoTeams">${icon('shuffle')}Fördela spelare i lag</button>
+        </div>
+      </section>
+      ${t.teams.length ? `
+        <div class="list-head"><span class="count">${t.teams.length} lag</span>${unassigned ? `<span class="small muted">· ${unassigned} spelare saknar lag</span>` : ''}</div>
+        <ul class="list">
+          ${t.teams
+            .map((team) => {
+              const members = t.players.filter((p) => p.teamId === team.id);
+              const names = members.slice(0, 5).map((p) => p.name).join(', ') + (members.length > 5 ? ' …' : '');
+              return `<li class="tap" data-action="editTeam" data-id="${team.id}">
+                <span class="team-swatch" style="background:${esc(team.color)}"></span>
+                <div class="grow"><div class="name">${esc(team.name)}</div><div class="sub">${members.length} spelare${names ? ' · ' + esc(names) : ''}</div></div>
+                ${icon('edit')}
+              </li>`;
+            })
+            .join('')}
+        </ul>
+        <p class="small muted" style="text-align:center">Lagens poäng räknas ihop från spelarnas poäng och visas under Tabell → Lag.</p>`
+        : emptyState('people', 'Inga lag än', 'Skapa lag och placera spelarna i dem – då får du en lagtabell där lagens poäng räknas ihop.', 'Fördela spelare automatiskt', 'autoTeams')}
+    `;
+    view.onsubmit = (e) => {
+      e.preventDefault();
+      const name = $('#newTeam').value.trim().replace(/\s+/g, ' ');
+      if (!name) return;
+      if (t.teams.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
+        toast(`"${name}" finns redan`);
+        return;
+      }
+      ensureTeam(t, name);
+      save();
+      render();
+      toast(`${name} skapat`);
+      $('#newTeam').focus();
+    };
+    view.onclick = (e) => {
+      const a = e.target.closest('[data-action]');
+      if (!a) return;
+      if (a.dataset.action === 'pview') {
+        ui.playersView = a.dataset.v;
+        saveUi();
+        render();
+      } else if (a.dataset.action === 'autoTeams') autoTeamsDialog(t);
+      else if (a.dataset.action === 'editTeam') editTeamDialog(t, a.dataset.id);
+    };
+  }
+
+  function editTeamDialog(t, teamId) {
+    const team = teamById(t, teamId);
+    if (!team) return;
+    let color = team.color;
+    const players = t.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'sv', { numeric: true }));
+    openModal({
+      title: 'Redigera lag',
+      body: `
+        <label class="field"><span>Namn</span><input type="text" id="etName" value="${esc(team.name)}" maxlength="60"></label>
+        <div class="field"><span>Färg</span>
+          <div class="swatches">${TEAM_COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c}" aria-label="Färg"></button>`).join('')}</div>
+        </div>
+        <div class="field"><span>Medlemmar (${t.players.filter((p) => p.teamId === team.id).length})</span>
+          <div class="member-box">
+            ${players.length ? players
+              .map((p) => {
+                const other = p.teamId && p.teamId !== team.id && teamById(t, p.teamId);
+                return `<label class="check member-row"><input type="checkbox" value="${p.id}" ${p.teamId === team.id ? 'checked' : ''}><span class="grow">${esc(p.name)}</span>${other ? `<span class="small muted">${esc(other.name)}</span>` : ''}</label>`;
+              })
+              .join('') : '<p class="muted small">Lägg till spelare först.</p>'}
+          </div>
+        </div>
+        <button class="btn danger-text ghost block" id="etDelete">${icon('del')}Ta bort lag</button>`,
+      actions: [
+        { label: 'Avbryt' },
+        {
+          label: 'Spara',
+          cls: 'primary',
+          onClick: (w) => {
+            const name = $('#etName', w).value.trim().replace(/\s+/g, ' ');
+            if (!name) return false;
+            if (t.teams.some((x) => x !== team && x.name.toLowerCase() === name.toLowerCase())) {
+              toast('Det namnet finns redan');
+              return false;
+            }
+            team.name = name;
+            team.color = color;
+            $$('.member-row input', w).forEach((cb) => {
+              const p = playerById(t, cb.value);
+              if (cb.checked) p.teamId = team.id;
+              else if (p.teamId === team.id) delete p.teamId;
+            });
+            commit('Laget sparat');
+          },
+        },
+      ],
+      onOpen: (w, close) => {
+        $$('.swatches button', w).forEach((b) =>
+          b.addEventListener('click', () => {
+            color = b.dataset.color;
+            $$('.swatches button', w).forEach((x) => x.classList.toggle('on', x === b));
+          })
+        );
+        $('#etDelete', w).onclick = () => {
+          close();
+          confirmDialog('Ta bort lag?', `${team.name} tas bort. Spelarna och deras poäng finns kvar, men utan lag.`, 'Ta bort', () => {
+            checkpoint();
+            t.players.forEach((p) => {
+              if (p.teamId === team.id) delete p.teamId;
+            });
+            t.teams = t.teams.filter((x) => x !== team);
+            commit(`${team.name} borttaget`, true);
+          });
+        };
+      },
+    });
+  }
+
+  // Placerar grupper av spelar-id i lag. replace = ersätt hela lagindelningen.
+  function applyGroupsAsTeams(t, groups, names, replace) {
+    checkpoint();
+    if (replace) {
+      t.players.forEach((p) => delete p.teamId);
+      t.teams = [];
+    }
+    groups.forEach((g, i) => {
+      let team = t.teams[i];
+      if (!team) {
+        const name = (names && names[i]) || 'Lag ' + (i + 1);
+        team = { id: L.uid(), name: name, color: colorForTeam(name, i) };
+        t.teams.push(team);
+      }
+      g.forEach((pid) => {
+        const p = playerById(t, pid);
+        if (p) p.teamId = team.id;
+      });
+    });
+  }
+
+  function autoTeamsDialog(t) {
+    const rows = L.computeStandings(t);
+    if (rows.length < 2) {
+      toast('Det behövs minst 2 aktiva spelare');
+      return;
+    }
+    openModal({
+      title: 'Fördela spelare i lag',
+      body: `
+        <label class="field"><span>Antal lag</span><input type="number" id="atCount" min="2" max="${rows.length}" value="${Math.max(2, t.teams.length || 2)}"></label>
+        <label class="field"><span>Fördelning</span>
+          <select id="atHow">
+            <option value="random">Slumpad</option>
+            <option value="snake">Jämna lag efter tabellen (ormfördelning)</option>
+          </select>
+        </label>
+        <label class="field"><span>Vilka spelare</span>
+          <select id="atScope">
+            <option value="all">Alla aktiva spelare (gör om indelningen)</option>
+            <option value="free">Bara spelare som saknar lag</option>
+          </select>
+        </label>
+        <p class="small muted">Befintliga lag återanvänds. Saknas lag skapas de som Lag 1, Lag 2 …</p>`,
+      actions: [
+        { label: 'Avbryt' },
+        {
+          label: 'Fördela',
+          cls: 'primary',
+          onClick: (w) => {
+            const n = Math.max(2, Math.min(rows.length, Math.round(Number($('#atCount', w).value) || 2)));
+            const how = $('#atHow', w).value;
+            const scope = $('#atScope', w).value;
+            if (scope === 'all') {
+              applyGroupsAsTeams(t, L.makeGroups(rows.map((r) => r.id), n, how), null, false);
+            } else {
+              const free = rows.filter((r) => !(r.player.teamId && teamById(t, r.player.teamId))).map((r) => r.id);
+              if (!free.length) {
+                toast('Alla spelare har redan ett lag');
+                return false;
+              }
+              applyGroupsAsTeams(t, Array.from({ length: n }, () => []), null, false);
+              const order = how === 'snake' ? free : L.shuffle(free);
+              const teams = t.teams.slice(0, n);
+              order.forEach((pid) => {
+                const size = (team) => t.players.filter((p) => p.teamId === team.id && p.active !== false).length;
+                const target = teams.reduce((best, team) => (size(team) < size(best) ? team : best), teams[0]);
+                playerById(t, pid).teamId = target.id;
+              });
+            }
+            ui.playersView = 'teams';
+            saveUi();
+            commit('Spelarna är fördelade i lag', true);
+          },
+        },
+      ],
+    });
+  }
+
   /* ----------------------------- Poäng ------------------------------ */
 
   function renderPoints(view, t) {
     const activePlayers = t.players.filter((p) => p.active !== false);
     if (!activePlayers.length) {
-      view.innerHTML = emptyState('people', 'Lägg till spelare först', 'Poäng matas in per omgång för varje aktiv spelare.', 'Gå till Spelare', 'goPlayers');
+      view.innerHTML = emptyState('people', `Lägg till ${W(t).one} först`, `Poäng matas in per omgång för varje aktiv${isTeamMode(t) ? 't lag' : ' spelare'}.`, `Gå till ${W(t).One}`, 'goPlayers');
       view.onclick = (e) => e.target.closest('[data-action="goPlayers"]') && setTab('players');
       return;
     }
@@ -613,6 +934,7 @@
           <option value="rank" ${ui.pointsSort === 'rank' ? 'selected' : ''}>Placering</option>
           <option value="empty" ${ui.pointsSort === 'empty' ? 'selected' : ''}>Ej ifyllda först</option>
           <option value="order" ${ui.pointsSort === 'order' ? 'selected' : ''}>Inlagd ordning</option>
+          ${hasTeams(t) ? `<option value="team" ${ui.pointsSort === 'team' ? 'selected' : ''}>Lag</option>` : ''}
         </select>
       </div>
       <ul class="list score-list" id="scoreList"></ul>
@@ -713,7 +1035,7 @@
     const active = t.players.filter((p) => p.active !== false);
     const filled = active.filter((p) => L.isNum(round.scores[p.id])).length;
     const txt = $('#roundProgressText');
-    if (txt) txt.textContent = `${filled} av ${active.length} spelare har poäng`;
+    if (txt) txt.textContent = `${filled} av ${active.length} ${W(t).one} har poäng`;
     const bar = $('#roundProgress');
     if (bar) bar.style.width = (active.length ? (filled / active.length) * 100 : 0) + '%';
   }
@@ -731,6 +1053,10 @@
     else if (ui.pointsSort === 'rank') list.sort((a, b) => rankOf[a.id] - rankOf[b.id]);
     else if (ui.pointsSort === 'empty')
       list.sort((a, b) => (L.isNum(round.scores[a.id]) ? 1 : 0) - (L.isNum(round.scores[b.id]) ? 1 : 0) || a.name.localeCompare(b.name, 'sv', { numeric: true }));
+    else if (ui.pointsSort === 'team' && hasTeams(t)) {
+      const tn = (p) => (p.teamId && teamById(t, p.teamId) ? teamById(t, p.teamId).name : '\uffff');
+      list.sort((a, b) => tn(a).localeCompare(tn(b), 'sv', { numeric: true }) || a.name.localeCompare(b.name, 'sv', { numeric: true }));
+    }
     const quick = String(t.settings.quickValues || '')
       .split(/[;,\s]+/)
       .map((s) => parseNum(s))
@@ -742,7 +1068,7 @@
             return `
         <li>
           <div class="grow">
-            <div class="name">${esc(p.name)}</div>
+            <div class="name">${!isTeamMode(t) && p.teamId && teamById(t, p.teamId) ? teamDot(teamById(t, p.teamId)) : ''}${esc(p.name)}</div>
             <div class="sub" data-total="${p.id}"></div>
             ${quick.length ? `<div class="quick">${quick.map((q) => `<button data-action="quick" data-pid="${p.id}" data-v="${q}">${fmt(q)}</button>`).join('')}</div>` : ''}
           </div>
@@ -750,34 +1076,66 @@
         </li>`;
           })
           .join('')
-      : '<li class="muted">Ingen spelare matchar sökningen</li>';
+      : '<li class="muted">Inget matchar sökningen</li>';
     updateScoreTotals(t, round);
   }
 
   /* ----------------------------- Tabell ----------------------------- */
 
-  function cutoffFor(t) {
-    if (t.playoff) return t.playoff.seeds.length;
-    return t.settings.cutoff > 0 ? t.settings.cutoff : 0;
+  function cutoffFor(t, kind) {
+    kind = kind || 'player';
+    if (t.playoff) return (t.playoff.kind || 'player') === kind ? t.playoff.seeds.length : 0;
+    return kind === 'player' && t.settings.cutoff > 0 ? t.settings.cutoff : 0;
   }
 
-  function renderTable(view, t) {
-    const rows = L.standingsWithMovement(t);
-    topAction('share', 'Dela tabell', () => shareText(t.name + ' – tabell', standingsText(t, rows)));
+  function tableSeg(t) {
+    if (!hasTeams(t) || ui.big) return '';
+    return `<div class="seg top-seg">
+      <button data-action="tview" data-v="players" class="${ui.tableView !== 'teams' ? 'on' : ''}">Individuellt</button>
+      <button data-action="tview" data-v="teams" class="${ui.tableView === 'teams' ? 'on' : ''}">Lag</button>
+    </div>`;
+  }
+
+  function tableClicks(view, t, onRow) {
+    view.onclick = (e) => {
+      if (e.target.closest('[data-action="exitBig"]')) {
+        exitBig();
+        return;
+      }
+      const seg = e.target.closest('[data-action="tview"]');
+      if (seg) {
+        ui.tableView = seg.dataset.v;
+        saveUi();
+        render();
+        return;
+      }
+      const tr = e.target.closest('tr[data-id]');
+      if (tr) onRow(tr.dataset.id);
+    };
+  }
+
+  function bigButton() {
     topAction('full', 'Storbildsläge', () => {
       ui.big = true;
       keepScreenOn(true);
       render();
     });
+  }
+
+  function renderTable(view, t) {
+    if (hasTeams(t) && ui.tableView === 'teams') return renderTeamTable(view, t);
+    const rows = L.standingsWithMovement(t);
+    topAction('share', 'Dela tabell', () => shareText(t.name + ' – tabell', standingsText(t, rows)));
+    bigButton();
     if (!rows.length) {
-      view.innerHTML = emptyState('chart', 'Tabellen är tom', 'Lägg till spelare och mata in poäng, så räknas tabellen ut automatiskt.', 'Lägg till spelare', 'goPlayers');
+      view.innerHTML = emptyState('chart', 'Tabellen är tom', `Lägg till ${W(t).one} och mata in poäng, så räknas tabellen ut automatiskt.`, `Lägg till ${W(t).one}`, 'goPlayers');
       view.onclick = (e) => e.target.closest('[data-action="goPlayers"]') && setTab('players');
       return;
     }
     const cutoff = cutoffFor(t);
     const scoredRounds = t.rounds.filter(L.roundHasScores).length;
     const info = [];
-    info.push(`${rows.length} spelare`);
+    info.push(`${rows.length} ${W(t).one}`);
     info.push(`${scoredRounds} ${scoredRounds === 1 ? 'omgång' : 'omgångar'} spelade`);
     if (t.settings.bestOf > 0) info.push(`räknar bästa ${t.settings.bestOf}`);
 
@@ -790,7 +1148,7 @@
       body += `
         <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
           <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
-          <td class="l"><div class="pname">${esc(r.name)}${mv}</div>${r.player.club ? `<div class="pclub">${esc(r.player.club)}</div>` : ''}</td>
+          <td class="l"><div class="pname">${esc(r.name)}${mv}</div>${clubLine(t, r.player)}</td>
           <td>${r.played}</td>
           <td class="hide-narrow">${fmt(r.best)}</td>
           <td>${fmt(r.avg)}</td>
@@ -799,21 +1157,81 @@
     });
     view.innerHTML = `
       ${ui.big ? `<div class="big-title">${esc(t.name)}</div>` : ''}
+      ${tableSeg(t)}
       <div class="small muted" style="margin:0 4px 8px">${info.join(' · ')}</div>
       <table class="standings">
-        <thead><tr><th>#</th><th class="l">Spelare</th><th>Omg</th><th class="hide-narrow">Bäst</th><th>Snitt</th><th>Poäng</th></tr></thead>
+        <thead><tr><th>#</th><th class="l">${W(t).One}</th><th>Omg</th><th class="hide-narrow">Bäst</th><th>Snitt</th><th>Poäng</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
-      ${ui.big ? `<button class="btn big-exit" data-action="exitBig">${icon('exitFull')}Avsluta</button>` : '<p class="small muted" style="text-align:center">Tryck på en spelare för detaljer</p>'}
+      ${ui.big ? `<button class="btn big-exit" data-action="exitBig">${icon('exitFull')}Avsluta</button>` : `<p class="small muted" style="text-align:center">Tryck på ${isTeamMode(t) ? 'ett lag' : 'en spelare'} för detaljer</p>`}
     `;
-    view.onclick = (e) => {
-      if (e.target.closest('[data-action="exitBig"]')) {
-        exitBig();
-        return;
+    tableClicks(view, t, (id) => playerStatsDialog(t, id));
+  }
+
+  function clubLine(t, p) {
+    if (isTeamMode(t)) return p.members && p.members.length ? `<div class="pclub">${esc(p.members.join(', '))}</div>` : '';
+    const team = p.teamId && teamById(t, p.teamId);
+    return team ? `<div class="pclub">${teamDot(team)}${esc(team.name)}</div>` : '';
+  }
+
+  function teamScoringText(t) {
+    const s = t.settings;
+    if (s.teamScoring === 'avg') return 'lagpoäng = snitt per medlem';
+    if (s.teamScoring === 'top') return `lagpoäng = de ${s.teamTopN} bästa i laget`;
+    return 'lagpoäng = summan av medlemmarna';
+  }
+
+  function renderTeamTable(view, t) {
+    const rows = L.standingsWithMovement(t, L.computeTeamStandings);
+    topAction('share', 'Dela lagtabell', () => shareText(t.name + ' – lagtabell', standingsText(t, rows, 'team')));
+    bigButton();
+    const cutoff = cutoffFor(t, 'team');
+    let body = '';
+    rows.forEach((r, i) => {
+      if (cutoff && i === cutoff && cutoff < rows.length) {
+        body += `<tr class="cutoff"><td colspan="5"><div>▲ Slutspelsgräns – topp ${cutoff} ▲</div></td></tr>`;
       }
-      const tr = e.target.closest('tr[data-id]');
-      if (tr) playerStatsDialog(t, tr.dataset.id);
-    };
+      const mv = r.move > 0 ? `<span class="move up">▲${r.move}</span>` : r.move < 0 ? `<span class="move down">▼${-r.move}</span>` : '';
+      body += `
+        <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
+          <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
+          <td class="l"><div class="pname">${teamDot(r.team)}${esc(r.name)}${mv}</div></td>
+          <td>${r.size}</td>
+          <td class="hide-narrow">${fmt(r.best)}</td>
+          <td class="total">${fmt(r.total)}</td>
+        </tr>`;
+    });
+    view.innerHTML = `
+      ${ui.big ? `<div class="big-title">${esc(t.name)} – lag</div>` : ''}
+      ${tableSeg(t)}
+      <div class="small muted" style="margin:0 4px 8px">${rows.length} lag · ${teamScoringText(t)}</div>
+      <table class="standings">
+        <thead><tr><th>#</th><th class="l">Lag</th><th>Medl</th><th class="hide-narrow">Bäst</th><th>Poäng</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      ${ui.big ? `<button class="btn big-exit" data-action="exitBig">${icon('exitFull')}Avsluta</button>` : '<p class="small muted" style="text-align:center">Tryck på ett lag för att se medlemmarna.</p>'}
+    `;
+    tableClicks(view, t, (id) => teamStatsDialog(t, id));
+  }
+
+  function teamStatsDialog(t, id) {
+    const rows = L.computeTeamStandings(t);
+    const r = rows.find((x) => x.id === id);
+    if (!r) return;
+    openModal({
+      title: r.name,
+      body: `
+        <div class="stat-grid">
+          <div class="stat"><b>${r.rank}</b><span>Placering</span></div>
+          <div class="stat"><b>${fmt(r.total)}</b><span>Lagpoäng</span></div>
+          <div class="stat"><b>${r.size}</b><span>Medlemmar</span></div>
+        </div>
+        ${r.members.length ? `<table class="mini-table"><thead><tr><th class="l">Spelare</th><th>Omg</th><th>Poäng</th><th>Plac.</th></tr></thead><tbody>
+          ${r.members.map((m) => `<tr><td class="l">${esc(m.name)}</td><td>${m.played}</td><td>${fmt(m.total)}</td><td>${ordinal(m.rank)}</td></tr>`).join('')}
+        </tbody></table>` : '<p class="muted">Laget har inga aktiva spelare.</p>'}
+        <p class="small muted" style="margin-top:10px">${teamScoringText(t)[0].toUpperCase() + teamScoringText(t).slice(1)}. Ändras under Mer.</p>`,
+      actions: [{ label: 'Redigera lag', onClick: () => { setTimeout(() => editTeamDialog(t, id), 0); } }],
+    });
   }
 
   function exitBig() {
@@ -822,12 +1240,12 @@
     render();
   }
 
-  function standingsText(t, rows) {
-    const lines = [`${t.name} – Tabell`, ''];
-    const cutoff = cutoffFor(t);
+  function standingsText(t, rows, kind) {
+    const lines = [`${t.name} – ${kind === 'team' ? 'Lagtabell' : 'Tabell'}`, ''];
+    const cutoff = cutoffFor(t, kind);
     rows.forEach((r, i) => {
       if (cutoff && i === cutoff) lines.push('— slutspelsgräns —');
-      lines.push(`${r.rank}. ${r.name}  ${fmt(r.total)} p (${r.played} omg)`);
+      lines.push(kind === 'team' ? `${r.rank}. ${r.name}  ${fmt(r.total)} p (${r.size} spelare)` : `${r.rank}. ${r.name}  ${fmt(r.total)} p (${r.played} omg)`);
     });
     return lines.join('\n');
   }
@@ -846,7 +1264,7 @@
     openModal({
       title: r.name,
       body: `
-        ${r.player.club ? `<p class="muted">${esc(r.player.club)}</p>` : ''}
+        ${clubLine(t, r.player).replace('class="pclub"', 'class="muted" style="margin-bottom:10px"')}
         <div class="stat-grid">
           <div class="stat"><b>${r.rank}</b><span>Placering</span></div>
           <div class="stat"><b>${fmt(r.total)}</b><span>Poäng</span></div>
@@ -859,7 +1277,7 @@
       `,
       actions: [
         {
-          label: 'Redigera spelare',
+          label: isTeamMode(t) ? 'Redigera lag' : 'Redigera spelare',
           onClick: () => {
             setTimeout(() => editPlayerDialog(t, id), 0);
           },
@@ -914,7 +1332,7 @@
     view.innerHTML = `
       ${champion}
       <div class="row" style="margin:0 4px 10px">
-        <div class="grow small muted">${po.seeds.length} spelare · ${po.seeding === 'random' ? 'slumpad lottning' : 'seedat efter tabellen'} · ${res.playedMatches}/${res.totalMatches} matcher spelade</div>
+        <div class="grow small muted">${po.seeds.length} ${po.kind === 'team' || isTeamMode(t) ? 'lag' : 'spelare'} · ${po.seeding === 'random' ? 'slumpad lottning' : 'seedat efter tabellen'} · ${res.playedMatches}/${res.totalMatches} matcher spelade</div>
       </div>
       <div class="bracket-wrap">
         <div class="bracket">
@@ -963,13 +1381,30 @@
   }
 
   function renderPlayoffSetup(view, t) {
-    const rows = L.computeStandings(t);
+    if (!poDraft) poDraft = { kind: 'player', count: t.settings.cutoff || 32, seeding: 'standard', thirdPlace: true };
+    const kind = hasTeams(t) && poDraft.kind === 'team' ? 'team' : 'player';
+    const unit = kind === 'team' || isTeamMode(t) ? 'lag' : 'spelare';
+    const rows = kind === 'team' ? L.computeTeamStandings(t) : L.computeStandings(t);
+    const kindSeg = hasTeams(t)
+      ? `<div class="seg top-seg">
+          <button data-action="kind" data-v="player" class="${kind === 'player' ? 'on' : ''}">Spelare</button>
+          <button data-action="kind" data-v="team" class="${kind === 'team' ? 'on' : ''}">Lag</button>
+        </div>`
+      : '';
     if (rows.length < 2) {
-      view.innerHTML = emptyState('trophy', 'Inget slutspel än', 'Det behövs minst 2 aktiva spelare i tabellen för att skapa ett slutspel.', 'Lägg till spelare', 'goPlayers');
-      view.onclick = (e) => e.target.closest('[data-action="goPlayers"]') && setTab('players');
+      view.innerHTML = kindSeg + emptyState('trophy', 'Inget slutspel än', `Det behövs minst 2 ${unit} i tabellen för att skapa ett slutspel.`, kind === 'team' ? 'Skapa lag' : `Lägg till ${W(t).one}`, 'goPlayers');
+      view.onclick = (e) => {
+        const k = e.target.closest('[data-action="kind"]');
+        if (k) {
+          poDraft.kind = k.dataset.v;
+          render();
+        } else if (e.target.closest('[data-action="goPlayers"]')) {
+          if (kind === 'team') ui.playersView = 'teams';
+          setTab('players');
+        }
+      };
       return;
     }
-    if (!poDraft) poDraft = { count: Math.min(t.settings.cutoff || 32, rows.length), seeding: 'standard', thirdPlace: true };
     poDraft.count = Math.max(2, Math.min(poDraft.count, rows.length));
     const presets = [4, 8, 16, 32, 64].filter((n) => n <= rows.length);
     const n = poDraft.count;
@@ -978,15 +1413,16 @@
     let warn = '';
     if (n < rows.length && rows[n - 1].total === rows[n].total) {
       const tiedNames = rows.filter((r) => r.total === rows[n - 1].total).map((r) => r.name);
-      warn = `<div class="warn">⚠️ Delad poäng vid gränsen: ${esc(tiedNames.join(', '))} har ${fmt(rows[n - 1].total)} p. Särskiljs på bästa omgång, sedan snitt. Justera poängen om ni vill avgöra på annat sätt.</div>`;
+      warn = `<div class="warn">⚠️ Delad poäng vid gränsen: ${esc(tiedNames.join(', '))} har ${fmt(rows[n - 1].total)} p. Särskiljs på ${kind === 'team' ? 'lagets bästa spelare' : 'bästa omgång, sedan snitt'}. Justera poängen om ni vill avgöra på annat sätt.</div>`;
     }
     const byes = size - n;
 
     view.innerHTML = `
+      ${kindSeg}
       <section class="card">
-        <h3>Skapa slutspel</h3>
-        <p>De bästa spelarna i tabellen placeras automatiskt in i slutspelsträdet.</p>
-        <label class="field"><span>Antal spelare till slutspel</span></label>
+        <h3>Skapa slutspel${kind === 'team' ? ' mellan lag' : ''}</h3>
+        <p>De bästa ${unit === 'lag' ? 'lagen' : 'spelarna'} i ${kind === 'team' ? 'lagtabellen' : 'tabellen'} placeras automatiskt in i slutspelsträdet.</p>
+        <label class="field"><span>Antal ${unit} till slutspel</span></label>
         <div class="seg">
           ${presets.map((p) => `<button data-action="count" data-n="${p}" class="${p === n ? 'on' : ''}">${p}</button>`).join('')}
           ${rows.length <= 64 && !presets.includes(rows.length) ? `<button data-action="count" data-n="${rows.length}" class="${rows.length === n ? 'on' : ''}">Alla (${rows.length})</button>` : ''}
@@ -999,8 +1435,8 @@
           </select>
         </label>
         <label class="check"><input type="checkbox" id="poThird" ${poDraft.thirdPlace ? 'checked' : ''}> Spela match om tredjepris</label>
-        ${byes ? `<p class="small" style="margin-top:8px">${byes} topp-seedade spelare går direkt vidare (walk over) eftersom ${n} inte är en jämn trädstorlek (${size}).</p>` : ''}
-        <button class="btn primary block" data-action="create" style="margin-top:10px">${icon('trophy')}Skapa slutspel med ${n} spelare</button>
+        ${byes ? `<p class="small" style="margin-top:8px">${byes} topp-seedade ${unit} går direkt vidare (walk over) eftersom ${n} inte är en jämn trädstorlek (${size}).</p>` : ''}
+        <button class="btn primary block" data-action="create" style="margin-top:10px">${icon('trophy')}Skapa slutspel med ${n} ${unit}</button>
       </section>
       ${warn}
       <section class="card">
@@ -1013,12 +1449,17 @@
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
       if (!a) return;
-      if (a.dataset.action === 'count') {
+      if (a.dataset.action === 'kind') {
+        poDraft.kind = a.dataset.v;
+        poDraft.count = a.dataset.v === 'team' ? Infinity : t.settings.cutoff || 32;
+        render();
+      } else if (a.dataset.action === 'count') {
         poDraft.count = Number(a.dataset.n);
         render();
       } else if (a.dataset.action === 'create') {
         const ids = rows.slice(0, poDraft.count).map((r) => r.id);
         t.playoff = L.createPlayoff(ids, { seeding: poDraft.seeding, thirdPlace: poDraft.thirdPlace });
+        t.playoff.kind = kind;
         poDraft = null;
         commit('Slutspelet är skapat!');
       }
@@ -1164,7 +1605,7 @@
             (x) => `
           <li class="tap ${x.id === db.activeId ? 'current' : ''}" data-action="switch" data-id="${x.id}">
             <div class="grow"><div class="name">${esc(x.name)}</div>
-            <div class="sub">${x.players.length} spelare · ${x.rounds.length} omgångar${x.playoff ? ' · slutspel' : ''}</div></div>
+            <div class="sub">${x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one} · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}</div></div>
             ${x.id === db.activeId ? '<span class="small" style="color:var(--primary);font-weight:700">AKTIV</span>' : ''}
           </li>`
           )
@@ -1173,15 +1614,26 @@
       <div class="row wrap" style="margin-top:10px">
         <button class="btn small primary" data-action="newT">${icon('add')}Ny turnering</button>
         <button class="btn small" data-action="renameT">Byt namn</button>
-        <button class="btn small" data-action="copyT">Kopiera spelare till ny</button>
+        <button class="btn small" data-action="copyT">Kopiera ${W(t).one} till ny</button>
         <button class="btn small danger-text" data-action="deleteT">Ta bort</button>
       </div>
+
+      <div class="section-title">Typ av turnering (${esc(t.name)})</div>
+      <section class="card">
+        <div class="seg" style="margin-bottom:8px">
+          <button data-action="mode" data-v="individual" class="${!isTeamMode(t) ? 'on' : ''}">Individuell</button>
+          <button data-action="mode" data-v="team" class="${isTeamMode(t) ? 'on' : ''}">Lagturnering</button>
+        </div>
+        <p class="small" style="margin:0">${isTeamMode(t)
+          ? 'Lagen är deltagarna: poäng matas in per lag och slutspelet spelas mellan lag.'
+          : 'Spelarna är deltagarna. Placera dem i lag under Spelare → Lag för att även få en lagtabell och kunna spela slutspel mellan lag.'}</p>
+      </section>
 
       <div class="section-title">Verktyg</div>
       <ul class="list">
         <li class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
         <li class="tap" data-action="groups">${icon('shuffle')}<div class="grow"><div class="name">Lottning & grupper</div><div class="sub">Slumpa par eller dela in i grupper</div></div></li>
-        <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa en spelare</div><div class="sub">T.ex. vem som börjar</div></div></li>
+        <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
       </ul>
 
       <div class="section-title">Poängräkning (${esc(t.name)})</div>
@@ -1189,6 +1641,15 @@
         <label class="field"><span>Räkna bara bästa X omgångar (0 = alla)</span><input type="number" min="0" id="setBestOf" value="${t.settings.bestOf || 0}"></label>
         <label class="field"><span>Snabbknappar för poäng (t.ex. 3, 1, 0)</span><input type="text" id="setQuick" value="${esc(t.settings.quickValues)}" placeholder="Tomt = inga snabbknappar"></label>
         <label class="field" style="margin-bottom:0"><span>Visa slutspelsgräns i tabellen efter plats (0 = ingen)</span><input type="number" min="0" id="setCutoff" value="${t.settings.cutoff || 0}"></label>
+        ${!isTeamMode(t) ? `
+        <label class="field" style="margin:12px 0 0"><span>Lagpoäng i lagtabellen</span>
+          <select id="setTeamScoring">
+            <option value="sum" ${t.settings.teamScoring === 'sum' ? 'selected' : ''}>Summan av alla medlemmars poäng</option>
+            <option value="avg" ${t.settings.teamScoring === 'avg' ? 'selected' : ''}>Snitt per medlem (rättvist vid olika lagstorlek)</option>
+            <option value="top" ${t.settings.teamScoring === 'top' ? 'selected' : ''}>Summan av de X bästa i laget</option>
+          </select>
+        </label>
+        ${t.settings.teamScoring === 'top' ? `<label class="field" style="margin:12px 0 0"><span>X = antal som räknas per lag</span><input type="number" min="1" id="setTeamTopN" value="${t.settings.teamTopN}"></label>` : ''}` : ''}
       </section>
 
       <div class="section-title">Data & säkerhetskopia</div>
@@ -1222,14 +1683,14 @@
           }
           break;
         case 'newT':
-          promptDialog('Ny turnering', 'Namn', '', (v) => {
-            const nt = newTournament(v);
-            db.tournaments[nt.id] = nt;
-            db.activeId = nt.id;
-            ui.roundId = null;
+          newTournamentDialog();
+          break;
+        case 'mode':
+          if (a.dataset.v !== t.mode) {
+            t.mode = a.dataset.v;
             poDraft = null;
-            commit(`${v} skapad`);
-          });
+            commit(isTeamMode(t) ? 'Nu är det en lagturnering' : 'Nu är det en individuell turnering');
+          }
           break;
         case 'renameT':
           promptDialog('Byt namn på turnering', 'Namn', t.name, (v) => {
@@ -1238,15 +1699,21 @@
           });
           break;
         case 'copyT':
-          promptDialog('Ny turnering med samma spelare', 'Namn', t.name + ' (2)', (v) => {
-            const nt = newTournament(v);
-            nt.players = t.players.map((p) => ({ id: L.uid(), name: p.name, club: p.club || '', active: true }));
+          promptDialog(`Ny turnering med samma ${W(t).one}`, 'Namn', t.name + ' (2)', (v) => {
+            const nt = newTournament(v, t.mode);
+            nt.players = t.players.map((p) => {
+              const c = { id: L.uid(), name: p.name, active: true };
+              if (p.teamId) c.teamId = p.teamId;
+              if (p.members) c.members = p.members.slice();
+              return c;
+            });
+            nt.teams = t.teams.map((x) => Object.assign({}, x));
             nt.settings = Object.assign({}, t.settings);
             db.tournaments[nt.id] = nt;
             db.activeId = nt.id;
             ui.roundId = null;
             poDraft = null;
-            commit(`${v} skapad med ${nt.players.length} spelare`);
+            commit(`${v} skapad med ${nt.players.length} ${W(nt).one}`);
           });
           break;
         case 'deleteT':
@@ -1294,8 +1761,65 @@
         t.settings.cutoff = Math.max(0, Math.round(Number(e.target.value) || 0));
         poDraft = null;
         commit('Sparat');
+      } else if (id === 'setTeamScoring') {
+        t.settings.teamScoring = e.target.value;
+        commit('Lagpoäng uppdaterad');
+      } else if (id === 'setTeamTopN') {
+        t.settings.teamTopN = Math.max(1, Math.round(Number(e.target.value) || 1));
+        commit('Lagpoäng uppdaterad');
       }
     };
+  }
+
+  function newTournamentDialog() {
+    let mode = 'individual';
+    openModal({
+      title: 'Ny turnering',
+      body: `
+        <label class="field"><span>Namn</span><input type="text" id="ntName" maxlength="60" autofocus></label>
+        <div class="field"><span>Typ</span>
+          <div class="seg" style="margin:0">
+            <button type="button" data-mode="individual" class="on">Individuell</button>
+            <button type="button" data-mode="team">Lagturnering</button>
+          </div>
+        </div>
+        <p class="small muted" id="ntHelp"></p>`,
+      actions: [
+        { label: 'Avbryt' },
+        {
+          label: 'Skapa',
+          cls: 'primary',
+          onClick: (w) => {
+            const v = $('#ntName', w).value.trim();
+            if (!v) {
+              toast('Skriv ett namn');
+              return false;
+            }
+            const nt = newTournament(v, mode);
+            db.tournaments[nt.id] = nt;
+            db.activeId = nt.id;
+            ui.roundId = null;
+            poDraft = null;
+            commit(`${v} skapad`);
+          },
+        },
+      ],
+      onOpen: (w) => {
+        const help = () =>
+          ($('#ntHelp', w).textContent =
+            mode === 'team'
+              ? 'Lagen är deltagarna – poäng matas in per lag.'
+              : 'Spelarna är deltagarna. De kan även placeras i lag för en lagtabell.');
+        help();
+        $$('[data-mode]', w).forEach((b) =>
+          b.addEventListener('click', () => {
+            mode = b.dataset.mode;
+            $$('[data-mode]', w).forEach((x) => x.classList.toggle('on', x === b));
+            help();
+          })
+        );
+      },
+    });
   }
 
   function dateStamp() {
@@ -1311,10 +1835,11 @@
       const s = v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : String(v);
       return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const head = ['Placering', 'Namn', 'Klubb', 'Omgångar', 'Bäst', 'Snitt', 'Totalt'].concat(t.rounds.map((r) => r.name));
+    const head = ['Placering', 'Namn', isTeamMode(t) ? 'Medlemmar' : 'Lag', 'Omgångar', 'Bäst', 'Snitt', 'Totalt'].concat(t.rounds.map((r) => r.name));
     const lines = [head.map(cell).join(';')];
     rows.forEach((r) => {
-      lines.push([r.rank, r.name, r.player.club || '', r.played, r.best, r.avg, r.total].concat(r.perRound).map(cell).join(';'));
+      const extra = isTeamMode(t) ? (r.player.members || []).join(', ') : r.player.teamId && teamById(t, r.player.teamId) ? teamById(t, r.player.teamId).name : '';
+      lines.push([r.rank, r.name, extra, r.played, r.best, r.avg, r.total].concat(r.perRound).map(cell).join(';'));
     });
     return '﻿' + lines.join('\r\n');
   }
@@ -1554,17 +2079,18 @@
   function groupsDialog(t) {
     const rows = L.computeStandings(t);
     if (rows.length < 2) {
-      toast('Det behövs minst 2 aktiva spelare');
+      toast(`Det behövs minst 2 aktiva ${W(t).one}`);
       return;
     }
     let last = null;
+    let lastGroups = null;
     openModal({
       title: 'Lottning & grupper',
       body: `
         <label class="field"><span>Typ</span>
           <select id="gMode">
             <option value="pairs">Par (1 mot 1)</option>
-            <option value="size">Grupper med X spelare</option>
+            <option value="size">Grupper med X ${W(t).one}</option>
             <option value="count">X antal grupper</option>
           </select>
         </label>
@@ -1584,10 +2110,19 @@
         const upd = () => {
           const mode = $('#gMode', w).value;
           $('#gNumWrap', w).hidden = mode === 'pairs';
-          $('#gNumLabel', w).textContent = mode === 'size' ? 'Spelare per grupp' : 'Antal grupper';
+          $('#gNumLabel', w).textContent = mode === 'size' ? `${W(t).One} per grupp` : 'Antal grupper';
         };
         $('#gMode', w).addEventListener('change', upd);
         upd();
+        w.addEventListener('click', (e) => {
+          if (!e.target.closest('[data-gsave]') || !lastGroups) return;
+          const names = lastGroups.map((g, i) => 'Lag ' + String.fromCharCode(65 + (i % 26)) + (i >= 26 ? Math.floor(i / 26) : ''));
+          applyGroupsAsTeams(t, lastGroups, names, true);
+          ui.playersView = 'teams';
+          saveUi();
+          modalStack[modalStack.length - 1]();
+          commit(`${lastGroups.length} lag skapade från grupperna`, true);
+        });
       },
     });
 
@@ -1617,6 +2152,13 @@
       last = groups
         .map((g, i) => (mode === 'pairs' ? `${label(i)}: ${pname(t, g[0])} – ${g[1] ? pname(t, g[1]) : 'frilott'}` : `${label(i)}: ${g.map((id) => pname(t, id)).join(', ')}`))
         .join('\n');
+      lastGroups = mode === 'pairs' || isTeamMode(t) ? null : groups;
+      if (lastGroups) {
+        $('#gOut', w).insertAdjacentHTML(
+          'beforeend',
+          `<button class="btn block" data-gsave style="margin-top:12px">${icon('people')}Spara grupperna som lag</button><p class="small muted">Ersätter nuvarande lagindelning (kan ångras).</p>`
+        );
+      }
     }
   }
 

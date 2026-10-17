@@ -108,3 +108,31 @@ test('ormfördelning i grupper', () => {
   const groups = L.makeGroups(['1', '2', '3', '4', '5', '6', '7', '8'], 4, 'snake');
   assert.deepEqual(groups, [['1', '8'], ['2', '7'], ['3', '6'], ['4', '5']]);
 });
+
+test('lagtabell: summa, snitt och bästa X', () => {
+  const t = tournament(4, [{ p1: 10, p2: 4, p3: 7, p4: 1 }]);
+  t.teams = [{ id: 'A', name: 'Lag A' }, { id: 'B', name: 'Lag B' }];
+  t.players[0].teamId = 'A';
+  t.players[1].teamId = 'A';
+  t.players[2].teamId = 'B';
+  t.players[3].teamId = 'B';
+  let rows = L.computeTeamStandings(t);
+  assert.deepEqual(rows.map((r) => [r.id, r.total, r.size]), [['A', 14, 2], ['B', 8, 2]]);
+  t.settings.teamScoring = 'avg';
+  assert.deepEqual(L.computeTeamStandings(t).map((r) => r.total), [7, 4]);
+  t.settings.teamScoring = 'top';
+  t.settings.teamTopN = 1;
+  assert.deepEqual(L.computeTeamStandings(t).map((r) => [r.id, r.total]), [['A', 10], ['B', 7]]);
+});
+
+test('lagtabell med förflyttning och slutspel mellan lag', () => {
+  const t = tournament(2, [{ p1: 5, p2: 1 }, { p2: 10 }]);
+  t.teams = [{ id: 'A', name: 'A' }, { id: 'B', name: 'B' }];
+  t.players[0].teamId = 'A';
+  t.players[1].teamId = 'B';
+  const rows = L.standingsWithMovement(t, L.computeTeamStandings);
+  assert.equal(rows[0].id, 'B');
+  assert.equal(rows[0].move, 1);
+  const po = L.createPlayoff(rows.map((r) => r.id));
+  assert.equal(L.resolvePlayoff(po).rounds[0].matches[0].a, 'B');
+});

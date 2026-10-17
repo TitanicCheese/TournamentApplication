@@ -68,6 +68,10 @@
         };
       });
     rows.sort(compareRows);
+    return rankRows(rows);
+  }
+
+  function rankRows(rows) {
     let prev = null;
     rows.forEach((r, i) => {
       r.tied = false;
@@ -84,15 +88,53 @@
   }
 
   /**
-   * Tabell med förändring jämfört med före senaste spelade omgång.
-   * r.move > 0 betyder att spelaren klättrat.
+   * Lagtabell: lagens poäng räknas från medlemmarnas totalpoäng.
+   * settings.teamScoring: 'sum' (summa), 'avg' (snitt) eller 'top' (summan av de X bästa).
    */
-  function standingsWithMovement(t) {
-    const rows = computeStandings(t);
+  function computeTeamStandings(t, opts) {
+    const players = computeStandings(t, opts);
+    const scoring = (t.settings && t.settings.teamScoring) || 'sum';
+    const topN = Math.max(1, (t.settings && t.settings.teamTopN) || 3);
+    const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+    const rows = (t.teams || []).map((team) => {
+      const members = players.filter((r) => r.player.teamId === team.id);
+      const totals = members.map((m) => m.total).sort((a, b) => b - a);
+      let total;
+      if (scoring === 'avg') total = members.length ? sum(totals) / members.length : 0;
+      else if (scoring === 'top') total = sum(totals.slice(0, topN));
+      else total = sum(totals);
+      return {
+        id: team.id,
+        team: team,
+        name: team.name,
+        total: round2(total),
+        members: members,
+        size: members.length,
+        best: members.length ? totals[0] : null,
+        played: sum(members.map((m) => m.played)),
+      };
+    });
+    rows.sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      const ab = a.best == null ? -Infinity : a.best;
+      const bb = b.best == null ? -Infinity : b.best;
+      if (bb !== ab) return bb - ab;
+      return a.name.localeCompare(b.name, 'sv', { numeric: true });
+    });
+    return rankRows(rows);
+  }
+
+  /**
+   * Tabell med förändring jämfört med före senaste spelade omgång.
+   * r.move > 0 betyder att spelaren (eller laget) klättrat.
+   */
+  function standingsWithMovement(t, compute) {
+    compute = compute || computeStandings;
+    const rows = compute(t);
     const scored = t.rounds.filter(roundHasScores);
     if (scored.length >= 2) {
       const last = scored[scored.length - 1];
-      const prev = computeStandings(t, { rounds: t.rounds.filter((r) => r !== last) });
+      const prev = compute(t, { rounds: t.rounds.filter((r) => r !== last) });
       const prevRank = {};
       prev.forEach((r) => (prevRank[r.id] = r.rank));
       rows.forEach((r) => {
@@ -309,6 +351,7 @@
     round2: round2,
     roundHasScores: roundHasScores,
     computeStandings: computeStandings,
+    computeTeamStandings: computeTeamStandings,
     standingsWithMovement: standingsWithMovement,
     rankHistory: rankHistory,
     nextPow2: nextPow2,

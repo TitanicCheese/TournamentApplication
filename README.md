@@ -1,8 +1,19 @@
-# Turnering – turneringsapp för Android
+# Turnering – turneringsapp för Android och webbläsare
 
-En app för att köra turneringar direkt i mobilen: skriv in spelare, mata in poäng
-omgång för omgång, se en tabell som uppdateras automatiskt och skapa ett slutspel
-där t.ex. topp 32 från tabellen seedas in i ett slutspelsträd.
+En app för att köra turneringar direkt i mobilen eller datorn: skriv in spelare eller
+lag, mata in poäng omgång för omgång, se en tabell som uppdateras automatiskt och skapa
+ett slutspel där t.ex. topp 32 från tabellen seedas in i ett slutspelsträd.
+
+## Köra i webbläsaren
+
+- **Online:** https://titaniccheese.github.io/TournamentApplication/
+  (kräver att GitHub Pages är påslaget en gång: *Settings → Pages → Source: GitHub Actions*).
+  Kan läggas till på hemskärmen och fungerar sedan även offline.
+- **Som fil:** ladda ner `Turnering.html` under **Releases → Senaste version** och öppna den
+  i valfri webbläsare (dator, iPhone, surfplatta). Allt finns i den enda filen – inget internet behövs.
+
+Data sparas i webbläsaren på den enhet du använder. Flytta mellan enheter med
+**Mer → Exportera/Importera säkerhetskopia**.
 
 ## Installera på Android
 
@@ -19,9 +30,18 @@ installeras ovanpå den gamla – dina turneringar finns kvar.
 ## Funktioner
 
 **Spelare**
-- Lägg till en och en eller många på en gång (ett namn per rad, valfri klubb efter kommatecken)
-- Redigera namn/klubb, markera spelare som inaktiva (räknas inte i tabellen), ta bort
+- Lägg till en och en eller många på en gång (ett namn per rad, valfritt lag efter kommatecken)
+- Redigera namn och lag, markera spelare som inaktiva (räknas inte i tabellen), ta bort
 - Sök bland spelarna
+
+**Lag**
+- Två sätt att använda lag:
+  - *Individuell turnering med lag* – spelarna tävlar var för sig men tillhör lag. Lagens poäng
+    räknas ihop till en **lagtabell** (summa, snitt per medlem eller de X bästa i laget).
+  - *Lagturnering* – lagen är deltagarna: poäng matas in per lag, med medlemslista per lag.
+- Skapa lag manuellt, med färg, eller **fördela spelarna automatiskt** (slumpat eller jämna lag efter tabellen)
+- Lottningens grupper kan sparas direkt som lag
+- Slutspel kan spelas mellan spelare eller mellan lag
 
 **Poäng**
 - Omgångar (Omgång 1, 2, 3 …) som kan döpas om och tas bort
@@ -49,7 +69,7 @@ installeras ovanpå den gamla – dina turneringar finns kvar.
 - Match om tredjepris (valfri), vinnarbanner med pallplatser, dela slutspelet som text
 
 **Mer**
-- Flera turneringar, byt namn, kopiera spelarlistan till en ny turnering
+- Flera turneringar (individuella eller lagturneringar), byt namn, kopiera spelarlistan till en ny turnering
 - Matchtimer med larm (ljud + vibration), syns i toppfältet medan den går
 - Lottning: slumpade par eller grupper, eller jämna grupper efter tabellen (ormfördelning)
 - Slumpa en spelare
@@ -64,6 +84,7 @@ web/            Själva appen (HTML/CSS/JS) – fungerar även i en vanlig webbl
   logic.js      Tabellberäkning, seedning och slutspelsträd (ren logik)
   app.js        Gränssnittet
 tests/          Tester för logiken (node --test tests/*.test.js)
+tools/          Bygger den fristående Turnering.html
 app/            Android-skal (WebView) som paketerar web/ till en APK
 .github/        GitHub Actions som testar och bygger APK:n
 ```
@@ -77,7 +98,8 @@ Kräver JDK 17 och Android SDK:
 # APK: app/build/outputs/apk/release/app-release.apk
 ```
 
-Webbappen kan också provas direkt i datorn genom att öppna `web/index.html`.
+Webbappen kan också provas direkt i datorn genom att öppna `web/index.html`, och
+`node tools/build-single-html.js` bygger den fristående `Turnering.html`.
 
 Signeringsnyckeln `app/turnering.keystore` ligger i repot med avsikt så att alla
 byggen signeras likadant och kan installeras som uppdateringar. Byt till en egen

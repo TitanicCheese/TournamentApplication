@@ -1,5 +1,5 @@
 // Offline-stöd när appen körs som webbapp (PWA)
-const CACHE = 'turnering-v1';
+const CACHE = 'turnering-v2';
 const FILES = ['./', './index.html', './styles.css', './logic.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

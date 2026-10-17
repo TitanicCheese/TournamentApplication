@@ -1,0 +1,51 @@
+name: Publicera webbapp
+
+on:
+  push:
+    branches: ['claude/android-tournament-app-ei2lq8', 'main']
+    paths: ['web/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publicera på GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # GitHub Pages måste slås på en gång: Settings → Pages → Source: GitHub Actions
+      - name: Kontrollera att GitHub Pages är påslaget
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" --silent 2>/dev/null; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GitHub Pages är inte påslaget. Gå till Settings → Pages och välj Source: GitHub Actions, kör sedan detta workflow igen."
+          fi
+
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.enabled == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          path: web
+
+      - id: deploy
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v4

@@ -24,6 +24,12 @@ jobs:
         with:
           node-version: 22
       - run: node --test tests/*.test.js
+      - name: Bygg fristående webbversion
+        run: node tools/build-single-html.js web Turnering.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Turnering-html
+          path: Turnering.html
 
   build:
     name: Bygg APK
@@ -50,19 +56,23 @@ jobs:
           name: Turnering-apk
           path: Turnering.apk
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: Turnering-html
+
       - name: Publicera som "Senaste version"
         if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete senaste --yes --cleanup-tag || true
-          gh release create senaste Turnering.apk \
+          gh release create senaste Turnering.apk Turnering.html \
             --target "$GITHUB_SHA" \
             --title "Senaste version (build ${{ github.run_number }})" \
-            --notes "Ladda ner **Turnering.apk** på din Android-telefon och öppna filen för att installera. Byggd från \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7})."
+            --notes "**Android:** ladda ner Turnering.apk på telefonen och öppna filen för att installera. **Webbläsare (dator/iPhone/surfplatta):** ladda ner Turnering.html och öppna den – fungerar även utan internet. Byggd från \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7})."
 
       - name: Publicera versionsrelease
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" Turnering.apk --title "Turnering $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" Turnering.apk Turnering.html --title "Turnering $GITHUB_REF_NAME" --generate-notes
