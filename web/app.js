@@ -311,6 +311,26 @@
       Bridge.saveFile(name, mime, content);
       return;
     }
+    // Där nedladdningar är spärrade (t.ex. inbäddad sida) visas innehållet för kopiering
+    if (window.TURNERING_NO_DOWNLOAD) {
+      openModal({
+        title: name,
+        body: `<p class="small muted">Kopiera texten och spara den, t.ex. i Anteckningar. Den kan klistras in igen under Importera.</p><textarea class="share-text" readonly id="saveText">${esc(content)}</textarea>`,
+        actions: [
+          {
+            label: 'Kopiera',
+            cls: 'primary',
+            onClick: (w) => {
+              const ta = $('#saveText', w);
+              ta.select();
+              Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(content)).then(() => toast('Kopierat'), () => toast('Markerat – kopiera med Ctrl+C / håll inne'));
+              return false;
+            },
+          },
+        ],
+      });
+      return;
+    }
     const blob = new Blob([content], { type: mime });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
