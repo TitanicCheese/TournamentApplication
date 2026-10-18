@@ -1330,24 +1330,6 @@
     const res = L.resolvePlayoff(po);
     topAction('share', 'Dela slutspel', () => shareText(t.name + ' – slutspel', playoffText(t, res)));
 
-    const nameRow = (m, side) => {
-      const id = m[side];
-      const seed = side === 'a' ? m.seedA : m.seedB;
-      const score = side === 'a' ? m.sa : m.sb;
-      let cls = '';
-      let label;
-      if (id) {
-        label = esc(pname(t, id));
-        if (m.winner === id) cls = 'win';
-        else if (m.winner) cls = 'lose';
-      } else {
-        cls = 'tbd';
-        label = m.bye ? 'Walk over' : 'Väntar…';
-      }
-      return `<div class="m-row ${cls}"><span class="seed">${seed || ''}</span><span class="pn">${label}</span><span class="ps">${score != null ? fmt(score) : ''}</span></div>`;
-    };
-    const matchHtml = (m) =>
-      `<button class="match ${m.winner ? 'done' : ''} ${m.ready ? 'ready' : ''} ${m.bye ? 'bye' : ''}" data-key="${m.key}">${nameRow(m, 'a')}${nameRow(m, 'b')}</button>`;
 
     let champion = '';
     if (res.champion) {
@@ -1368,33 +1350,16 @@
       <div class="row" style="margin:0 4px 10px">
         <div class="grow small muted">${po.seeds.length} ${po.kind === 'team' || isTeamMode(t) ? 'lag' : 'spelare'} · ${po.seeding === 'random' ? 'slumpad lottning' : 'seedat efter tabellen'} · ${res.playedMatches}/${res.totalMatches} matcher spelade</div>
       </div>
-      <div class="bracket-wrap">
-        <div class="bracket">
-          ${res.rounds
-            .map(
-              (rd) => `
-            <div class="b-col">
-              <h4>${rd.name}<small>${rd.played}/${rd.matches.filter((m) => !m.bye).length} klara</small></h4>
-              <div class="b-matches">${rd.matches.map(matchHtml).join('')}</div>
-            </div>`
-            )
-            .join('')}
-        </div>
-      </div>
-      ${res.third && res.third.applicable ? `
-        <section class="card" style="max-width:260px">
-          <h3>Match om tredjepris</h3>
-          ${matchHtml(res.third)}
-        </section>` : ''}
+      ${bracketCanvas(t, leagueTreeNodes(res))}
       <p class="small muted">Tryck på en match för att skriva in resultat. Svep åt sidan för att se hela trädet.</p>
       <div class="row wrap">
         <button class="btn danger-text ghost" data-action="deletePo">${icon('del')}Ta bort slutspel</button>
       </div>
     `;
     view.onclick = (e) => {
-      const mEl = e.target.closest('.match[data-key]');
+      const mEl = e.target.closest('[data-action="match"]');
       if (mEl) {
-        matchDialog(t, mEl.dataset.key);
+        matchDialog(t, mEl.dataset.id);
         return;
       }
       const a = e.target.closest('[data-action="deletePo"]');
@@ -1405,13 +1370,7 @@
           commit('Slutspelet borttaget', true);
         });
     };
-    // Scrolla till första ospelade omgången
-    const wrap = $('.bracket-wrap', view);
-    const firstOpen = res.rounds.findIndex((rd) => rd.matches.some((m) => m.ready && !m.winner));
-    if (wrap && firstOpen > 0) {
-      const col = $$('.b-col', wrap)[firstOpen];
-      if (col) wrap.scrollLeft = Math.max(0, col.offsetLeft - 24);
-    }
+    applyBracketScroll(view);
   }
 
   function renderPlayoffSetup(view, t) {
@@ -2692,7 +2651,7 @@
   function matchLine(t, m, i) {
     const name = (id, side) => {
       if (id) return esc(pname(t, id));
-      return m.state === 'bye' ? '<i class="muted">Walk over</i>' : '<i class="muted">Väntar…</i>';
+      return m.state === 'bye' ? '<i class="muted">Walk over</i>' : '<span class="muted">-</span>';
     };
     const cls = (id) => (m.winner && id === m.winner ? 'win' : m.winner && id ? 'lose' : '');
     const score = (v) => (v != null ? fmt(v) : '');
@@ -2726,6 +2685,10 @@
       html += `<div class="section-title">${esc(rd.name)} ${rd.complete ? '· klar' : ''}</div>`;
       html += `<div class="heat-grid">${rd.heats.map((h) => heatCard(t, h, i, st)).join('')}</div>`;
       if (R.rounds.length > 1) html += `<p class="small muted" style="text-align:center">Tidigare rundor syns under Bracket.</p>`;
+    } else if (st.type === 'single' || st.type === 'double') {
+      const ready = R.matches.filter((m) => m.state === 'ready').length;
+      html += `<p class="small muted" style="margin:0 4px 10px">${R.done ? 'Alla matcher är spelade.' : `${ready} ${ready === 1 ? 'match' : 'matcher'} redo att spelas.`} Tryck på en match för att skriva in resultat.</p>`;
+      html += bracketCanvas(t, stageTreeNodes(st, R), { stage: i });
     } else {
       const ready = R.matches.filter((m) => m.state === 'ready');
       const done = R.matches.filter((m) => m.state === 'done').reverse();
@@ -2736,6 +2699,7 @@
       if (done.length) html += `<div class="section-title">Spelade (${done.length})</div><div class="mlist">${done.map((m) => matchLine(t, m, i)).join('')}</div>`;
     }
     view.innerHTML = html;
+    applyBracketScroll(view);
     view.onclick = (e) => stageClick(e, t);
   }
 
@@ -2968,7 +2932,6 @@
     let html = stageChips(t, i) + nextStageBanner(t, i, R);
     if (R.done && last) html += championBanner(t, R);
     html += `<div class="small muted" style="margin:0 4px 10px">${esc(SG.TYPES[st.type].label)} · ${esc(stageSummary(st))}</div>`;
-    const card = (m) => bracketCard(t, m, i);
 
     if (st.type === 'gsl' || st.type === 'rr') {
       html += `<div class="group-grid">${R.groups
@@ -2999,21 +2962,8 @@
         const ms = R.matches.filter((m) => m.round === r);
         html += `<div class="section-title">Omgång ${r + 1}</div><div class="mlist">${ms.map((m) => matchLine(t, m, i)).join('')}</div>`;
       }
-    } else if (st.type === 'single') {
-      const cols = [];
-      for (let r = 0; r < st.data.rounds; r++) cols.push(R.matches.filter((m) => m.section === 'ub' && m.round === r));
-      html += bracketColumns(cols, card);
-      const third = R.matches.find((m) => m.section === 'third');
-      if (third) html += `<section class="card" style="max-width:260px"><h3>Match om tredjepris</h3>${card(third)}</section>`;
-    } else if (st.type === 'double') {
-      const ub = st.data.ub.map((ids) => ids.map((id) => R.byId[id]));
-      const lb = st.data.lb.map((ids) => ids.map((id) => R.byId[id]));
-      html += `<div class="section-title">Övre träd</div>` + bracketColumns(ub, card);
-      html += `<div class="section-title">Undre träd</div>` + bracketColumns(lb, card);
-      html += `<div class="section-title">Final</div><div class="row wrap">${R.matches
-        .filter((m) => m.section === 'gf' && m.state !== 'skip')
-        .map((m) => `<div style="width:220px">${card(m)}</div>`)
-        .join('')}</div>`;
+    } else if (st.type === 'single' || st.type === 'double') {
+      html += bracketCanvas(t, stageTreeNodes(st, R), { stage: i });
     } else if (st.type === 'heats') {
       R.rounds
         .slice()
@@ -3025,38 +2975,11 @@
     }
     if (R.done && last) html += placementsCard(t, R);
     view.innerHTML = html;
+    applyBracketScroll(view);
     view.onclick = (e) => {
       if (e.target.closest('[data-share-final]')) return shareText(`${t.name} – resultat`, finalText(t, R));
       stageClick(e, t);
     };
-  }
-
-  function bracketColumns(cols, card) {
-    return `<div class="bracket-wrap"><div class="bracket">${cols
-      .map(
-        (ms) => `<div class="b-col"><h4>${esc(ms[0] ? ms[0].label : '')}<small>${ms.filter((m) => m.state === 'done').length}/${ms.filter((m) => m.state !== 'bye' && m.state !== 'empty').length} klara · ${boText(ms[0] && ms[0].bo)}</small></h4>
-        <div class="b-matches">${ms.map(card).join('')}</div></div>`
-      )
-      .join('')}</div></div>`;
-  }
-
-  function bracketCard(t, m, i) {
-    const row = (side) => {
-      const id = m[side];
-      const score = side === 'a' ? m.sa : m.sb;
-      let cls = '';
-      let label;
-      if (id) {
-        label = esc(pname(t, id));
-        if (m.winner === id) cls = 'win';
-        else if (m.winner) cls = 'lose';
-      } else {
-        cls = 'tbd';
-        label = m.state === 'bye' || m.state === 'empty' ? 'Walk over' : 'Väntar…';
-      }
-      return `<div class="m-row ${cls}"><span class="pn">${label}</span><span class="ps">${score != null ? fmt(score) : ''}</span></div>`;
-    };
-    return `<button class="match ${m.state === 'done' ? 'done' : ''} ${m.state === 'ready' ? 'ready' : ''} ${m.state === 'bye' || m.state === 'empty' ? 'bye' : ''}" data-action="match" data-i="${i}" data-id="${m.id}">${row('a')}${row('b')}</button>`;
   }
 
   function stageText(t, st, R) {
@@ -3079,6 +3002,186 @@
       R.matches.filter((m) => m.state === 'done' || m.state === 'ready').forEach((m) => lines.push(`${m.label}: ${ml(m)}`));
     }
     return lines.join('\n');
+  }
+
+  /* ---------------------- Slutspelsträd (ritat) ---------------------- */
+  // Ritar hela trädet med linjer mellan matcherna. Okända lag visas som "-".
+  // nodes: {id, sec: 'ub'|'lb'|'gf'|'third', col, index, srcs: [id], label, bo, a, b, sa, sb, winner, state, seedA, seedB}
+
+  const BW = 176; // kortets bredd
+  const BH = 62; // kortets höjd
+  const GX = 46; // mellanrum mellan kolumner
+  const GY = 14; // minsta mellanrum mellan kort
+  const HEAD = 40; // plats för kolumnrubriker
+
+  function layoutBracket(nodes) {
+    const pos = {};
+    const heads = [];
+    let top = 0;
+    let maxCol = 0;
+    let bottom = 0;
+    ['ub', 'lb'].forEach((sec) => {
+      const list = nodes.filter((n) => n.sec === sec);
+      if (!list.length) return;
+      const cols = [...new Set(list.map((n) => n.col))].sort((a, b) => a - b);
+      const y0 = top + HEAD;
+      let secBottom = y0;
+      cols.forEach((c) => {
+        let cursor = y0;
+        const inCol = list.filter((n) => n.col === c).sort((a, b) => a.index - b.index);
+        inCol.forEach((n) => {
+          const ys = n.srcs.map((s) => pos[s]).filter((p) => p && p.sec === sec).map((p) => p.y);
+          let y = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : cursor;
+          y = Math.max(y, cursor);
+          pos[n.id] = { x: c * (BW + GX), y: y, sec: sec };
+          cursor = y + BH + GY;
+          secBottom = Math.max(secBottom, cursor);
+        });
+        const first = inCol[0];
+        heads.push({ x: c * (BW + GX), y: top, label: first.label, sub: inCol, bo: first.bo });
+        maxCol = Math.max(maxCol, c);
+      });
+      top = secBottom + 26;
+      bottom = secBottom;
+    });
+    // Final (dubbelutslagning) placeras till höger, mitt emellan övre och undre final
+    const gfs = nodes.filter((n) => n.sec === 'gf');
+    gfs.forEach((n, k) => {
+      const ys = n.srcs.map((s) => pos[s]).filter(Boolean).map((p) => p.y);
+      const y = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : HEAD;
+      const col = maxCol + 1 + k;
+      pos[n.id] = { x: col * (BW + GX), y: y, sec: 'gf' };
+      heads.push({ x: col * (BW + GX), y: y - 26, label: n.label, sub: [n], bo: n.bo, inline: true });
+    });
+    if (gfs.length) maxCol += gfs.length;
+    // Match om tredjepris under finalen
+    nodes
+      .filter((n) => n.sec === 'third')
+      .forEach((n) => {
+        const fin = nodes.filter((x) => x.sec === 'ub').reduce((a, b) => (b.col > a.col ? b : a));
+        const fp = pos[fin.id];
+        const y = Math.max(fp.y + BH + 60, HEAD);
+        pos[n.id] = { x: fp.x, y: y, sec: 'third' };
+        heads.push({ x: fp.x, y: y - 26, label: n.label, sub: [n], bo: n.bo, inline: true });
+        bottom = Math.max(bottom, y + BH + GY);
+      });
+    Object.values(pos).forEach((p) => (bottom = Math.max(bottom, p.y + BH + GY)));
+    return { pos: pos, heads: heads, width: (maxCol + 1) * (BW + GX) - GX, height: bottom };
+  }
+
+  function bracketCanvas(t, nodes, opts) {
+    opts = opts || {};
+    const L2 = layoutBracket(nodes);
+    const byId = {};
+    nodes.forEach((n) => (byId[n.id] = n));
+    // Linjer: från vinnaren i en match till nästa match
+    const lines = [];
+    nodes.forEach((n) => {
+      const p = L2.pos[n.id];
+      n.srcs.forEach((s) => {
+        const q = L2.pos[s];
+        if (!p || !q) return;
+        const x1 = q.x + BW;
+        const y1 = q.y + BH / 2;
+        const x2 = p.x;
+        const y2 = p.y + BH / 2;
+        const mx = x2 - GX / 2;
+        const on = byId[s].state === 'done' || byId[s].state === 'bye';
+        lines.push(`<path class="${on ? 'on' : ''}" d="M${x1} ${y1} H${mx} V${y2} H${x2}"/>`);
+      });
+    });
+    const row = (n, side) => {
+      const id = n[side];
+      const score = side === 'a' ? n.sa : n.sb;
+      const seed = side === 'a' ? n.seedA : n.seedB;
+      let cls = '';
+      if (!id) cls = 'tbd';
+      else if (n.winner === id) cls = 'win';
+      else if (n.winner) cls = 'lose';
+      return `<span class="bm-row ${cls}"><span class="bm-seed">${id && seed ? seed : ''}</span><span class="pn">${id ? esc(pname(t, id)) : '-'}</span><span class="ps">${id && score != null ? fmt(score) : ''}</span></span>`;
+    };
+    const cards = nodes
+      .map((n) => {
+        const p = L2.pos[n.id];
+        if (!p) return '';
+        const isFinal = n.isFinal ? 'final' : '';
+        return `<button class="bm ${n.state} ${isFinal}" style="left:${p.x}px;top:${p.y}px;width:${BW}px;height:${BH}px" data-action="match" data-i="${opts.stage != null ? opts.stage : ''}" data-id="${n.id}" aria-label="${esc(n.label)}">${row(n, 'a')}${row(n, 'b')}</button>`;
+      })
+      .join('');
+    const heads = L2.heads
+      .map((h) => {
+        const real = h.sub.filter((m) => m.state !== 'bye' && m.state !== 'empty' && m.state !== 'skip');
+        const done = real.filter((m) => m.state === 'done').length;
+        return `<div class="bh ${h.inline ? 'inline' : ''}" style="left:${h.x}px;top:${h.y}px;width:${BW}px"><b>${esc(h.label)}</b><span>${h.bo ? 'Bo' + h.bo + ' · ' : ''}${done}/${real.length}</span></div>`;
+      })
+      .join('');
+    // Scrolla fram till första match som ska spelas
+    const next = nodes.find((n) => n.state === 'ready');
+    const scrollX = next && L2.pos[next.id] ? Math.max(0, L2.pos[next.id].x - 30) : 0;
+    return `<div class="bc-wrap" data-scroll="${scrollX}"><div class="bc" style="width:${L2.width}px;height:${L2.height}px">
+      <svg class="bc-lines" width="${L2.width}" height="${L2.height}" aria-hidden="true">${lines.join('')}</svg>${heads}${cards}</div></div>
+      <div class="bc-legend small muted"><span><i class="lg ready"></i>Redo att spelas</span><span><i class="lg done"></i>Spelad</span><span>- = ej klart än</span></div>`;
+  }
+
+  function applyBracketScroll(view) {
+    $$('.bc-wrap', view).forEach((w) => (w.scrollLeft = Number(w.dataset.scroll) || 0));
+  }
+
+  // Bygger trädets noder från en fas (utslagning eller dubbelutslagning)
+  function stageTreeNodes(st, R) {
+    const lastUb = st.type === 'single' ? st.data.rounds - 1 : st.data.k - 1;
+    return R.matches
+      .filter((m) => m.state !== 'skip' || m.section !== 'gf')
+      .map((m) => ({
+        id: m.id,
+        sec: m.section,
+        col: m.round,
+        index: m.index || 0,
+        srcs: m.src.filter((s) => s.w).map((s) => s.w),
+        label: m.label,
+        bo: m.bo,
+        a: m.a,
+        b: m.b,
+        sa: m.sa,
+        sb: m.sb,
+        winner: m.winner,
+        state: m.state === 'empty' ? 'bye' : m.state,
+        seedA: m.a ? R.seedOf[m.a] : null,
+        seedB: m.b ? R.seedOf[m.b] : null,
+        isFinal: (st.type === 'single' && m.section === 'ub' && m.round === lastUb) || m.section === 'gf',
+      }));
+  }
+
+  // Poängligans slutspel i samma ritade form
+  function leagueTreeNodes(res) {
+    const nodes = [];
+    res.rounds.forEach((rd, r) =>
+      rd.matches.forEach((m, k) =>
+        nodes.push({
+          id: m.key,
+          sec: 'ub',
+          col: r,
+          index: k,
+          srcs: r === 0 ? [] : [`${r - 1}-${2 * k}`, `${r - 1}-${2 * k + 1}`],
+          label: rd.name,
+          bo: 0,
+          a: m.a,
+          b: m.b,
+          sa: m.sa,
+          sb: m.sb,
+          winner: m.bye ? null : m.winner,
+          state: m.bye ? 'bye' : m.winner ? 'done' : m.ready ? 'ready' : 'pending',
+          seedA: m.seedA,
+          seedB: m.seedB,
+          isFinal: r === res.rounds.length - 1,
+        })
+      )
+    );
+    if (res.third && res.third.applicable) {
+      const m = res.third;
+      nodes.push({ id: 'third', sec: 'third', col: 0, index: 0, srcs: [], label: 'Match om tredjepris', bo: 0, a: m.a, b: m.b, sa: m.sa, sb: m.sb, winner: m.winner, state: m.winner ? 'done' : m.ready ? 'ready' : 'pending', seedA: m.seedA, seedB: m.seedB });
+    }
+    return nodes;
   }
 
   /* ------------------------------ Start ----------------------------- */

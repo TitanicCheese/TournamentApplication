@@ -624,3 +624,44 @@ details.cfg[open] > summary::after { content: '▴'; }
 .roster { font-weight: 800; font-size: .72rem; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
 .roster.short { background: color-mix(in srgb, var(--gold) 25%, transparent); color: color-mix(in srgb, var(--gold) 55%, var(--text)); }
 .chip[disabled] { opacity: .45; }
+
+/* --------------------------------------------------- Ritat slutspelsträd */
+.bc-wrap {
+  overflow: auto; margin: 0 -12px 8px; padding: 6px 12px 18px; -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 230px);
+}
+.bc { position: relative; }
+.bc-lines { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.bc-lines path { fill: none; stroke: color-mix(in srgb, var(--muted) 45%, transparent); stroke-width: 2; stroke-linejoin: round; }
+.bc-lines path.on { stroke: var(--primary); stroke-width: 2.5; }
+.bh { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.bh b { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.bh span { font-size: .68rem; color: var(--muted); font-weight: 600; }
+.bh.inline { flex-direction: row; justify-content: center; gap: 6px; }
+.bm {
+  position: absolute; display: flex; flex-direction: column; padding: 0; text-align: left; overflow: hidden;
+  background: var(--glass-strong); border: 1px solid var(--glass-edge); border-radius: 14px;
+  box-shadow: var(--glass-shine), 0 4px 14px rgba(60, 40, 140, .12);
+  transition: transform .12s;
+}
+.bm:active { transform: scale(.97); }
+.bm.ready { border-color: transparent; box-shadow: 0 0 0 2.5px var(--primary), 0 6px 18px rgba(124, 77, 255, .35); }
+.bm.pending { opacity: .85; }
+.bm.bye { opacity: .45; }
+.bm.final { border: 2px solid var(--gold); }
+.bm.final.done { box-shadow: 0 0 0 2px var(--gold), 0 8px 24px rgba(245, 179, 1, .35); }
+.bm-row { flex: 1; display: flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 0; }
+.bm-row + .bm-row { border-top: 1px solid var(--hairline); }
+.bm-seed { width: 16px; font-size: .68rem; font-weight: 700; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.bm-row .pn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; font-weight: 600; }
+.bm-row .ps { font-weight: 900; font-variant-numeric: tabular-nums; min-width: 16px; text-align: right; }
+.bm-row.win { background: linear-gradient(90deg, rgba(124, 92, 255, .2), rgba(216, 77, 216, .08)); }
+.bm-row.win .pn { font-weight: 800; }
+.bm-row.win .ps { color: var(--primary); }
+.bm-row.lose .pn { color: var(--muted); text-decoration: line-through; }
+.bm-row.lose .ps { color: var(--muted); }
+.bm-row.tbd .pn { color: var(--muted); font-weight: 800; }
+.bc-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 4px 12px; }
+.bc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lg { display: inline-block; width: 14px; height: 10px; border-radius: 4px; border: 2px solid var(--primary); }
+.lg.done { border-color: var(--glass-edge); background: linear-gradient(90deg, rgba(124, 92, 255, .35), rgba(216, 77, 216, .15)); }
