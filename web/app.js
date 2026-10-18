@@ -37,7 +37,7 @@
   /* Data                                                                */
   /* ------------------------------------------------------------------ */
 
-  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32, teamScoring: 'sum', teamTopN: 3 };
+  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32, teamScoring: 'sum', teamTopN: 3, rosterSize: 0 };
   const TEAM_COLORS = ['#6c4dff', '#ff4d8d', '#12b886', '#ff9f1c', '#2ec5ff', '#f03e3e', '#3b82f6', '#be4bdb', '#40c057', '#fab005', '#15aabf', '#495057'];
   // Färgord i lagnamnet styr färgen, t.ex. "Lag Röd" blir rött
   const NAMED_COLORS = [
@@ -72,6 +72,9 @@
     if (t.playoff && !t.playoff.kind) t.playoff.kind = 'player';
     if (!t.name) t.name = 'Turnering';
     if (t.mode !== 'team') t.mode = 'individual';
+    if (t.format !== 'stages') t.format = 'league';
+    t.stages = Array.isArray(t.stages) ? t.stages : [];
+    if (!t.presetId) t.presetId = t.format === 'league' ? 'league' : 'custom';
     t.teams = Array.isArray(t.teams) ? t.teams : [];
     // Äldre versioner hade ett fritt "klubb"-fält – gör om det till lag
     t.players.forEach((p) => {
@@ -119,7 +122,7 @@
     }
   }
 
-  const ui = { tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
+  const ui = { stageIdx: null, tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
     if (saved.tab) ui.tab = saved.tab;
@@ -179,7 +182,12 @@
   }
 
   function teamTag(t, p) {
-    if (isTeamMode(t)) return p.members && p.members.length ? `<div class="sub">${esc(p.members.join(', '))}</div>` : '';
+    if (isTeamMode(t)) {
+      const size = t.settings.rosterSize;
+      const n = (p.members || []).length;
+      const badge = size ? `<span class="roster ${n < size ? 'short' : ''}">${n}/${size}</span> ` : '';
+      return n || size ? `<div class="sub">${badge}${esc((p.members || []).join(', '))}</div>` : '';
+    }
     const team = p.teamId && teamById(t, p.teamId);
     return team ? `<div class="sub"><span class="team-tag"><i style="background:${esc(team.color)}"></i>${esc(team.name)}</span></div>` : '';
   }
@@ -421,12 +429,18 @@
     document.title = t.name + ' – Turnering';
     $$('#tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === ui.tab));
     $('#tabbar [data-tab="players"] span').textContent = W(t).One;
+    const staged = isStages(t);
+    $('#tabbar [data-tab="points"] span').textContent = staged ? 'Matcher' : 'Poäng';
+    $('#tabbar [data-tab="table"] span').textContent = staged ? 'Bracket' : 'Tabell';
+    $('#tabbar [data-tab="playoff"] span').textContent = staged ? 'Format' : 'Slutspel';
     document.body.classList.toggle('big', ui.big);
     const view = $('#view');
     view.className = 'view view-' + ui.tab;
     view.onclick = view.oninput = view.onchange = view.onkeydown = view.onsubmit = null;
     $('#topActions').innerHTML = '';
-    const renderers = { players: renderPlayers, points: renderPoints, table: renderTable, playoff: renderPlayoff, more: renderMore };
+    const renderers = staged
+      ? { players: renderPlayers, points: renderStageMatches, table: renderStageBracket, playoff: renderStageFormat, more: renderMore }
+      : { players: renderPlayers, points: renderPoints, table: renderTable, playoff: renderPlayoff, more: renderMore };
     (renderers[ui.tab] || renderTable)(view, t);
   }
 
@@ -608,7 +622,7 @@
     const inPlayoff = t.playoff && t.playoff.seeds.includes(id);
     const team = isTeamMode(t);
     const extraField = team
-      ? `<label class="field"><span>Medlemmar (en per rad)</span><textarea id="epMembers" style="min-height:110px">${esc((p.members || []).join('\n'))}</textarea></label>`
+      ? `<label class="field"><span>Spelare i laget, en per rad${t.settings.rosterSize ? ` (${t.settings.rosterSize} st)` : ''}</span><textarea id="epMembers" style="min-height:110px">${esc((p.members || []).join('\n'))}</textarea></label>`
       : `<label class="field"><span>Lag</span>
           <select id="epTeam">
             <option value="">Inget lag</option>
@@ -1625,7 +1639,7 @@
             (x) => `
           <li class="tap ${x.id === db.activeId ? 'current' : ''}" data-action="switch" data-id="${x.id}">
             <div class="grow"><div class="name">${esc(x.name)}</div>
-            <div class="sub">${x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one} · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}</div></div>
+            <div class="sub">${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}${x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`}</div></div>
             ${x.id === db.activeId ? '<span class="small" style="color:var(--primary);font-weight:700">AKTIV</span>' : ''}
           </li>`
           )
@@ -1645,8 +1659,10 @@
           <button data-action="mode" data-v="team" class="${isTeamMode(t) ? 'on' : ''}">Lagturnering</button>
         </div>
         <p class="small" style="margin:0">${isTeamMode(t)
-          ? 'Lagen är deltagarna: poäng matas in per lag och slutspelet spelas mellan lag.'
-          : 'Spelarna är deltagarna. Placera dem i lag under Spelare → Lag för att även få en lagtabell och kunna spela slutspel mellan lag.'}</p>
+          ? 'Lagen är deltagarna och varje lag har en spelarlista.'
+          : isStages(t) ? 'Varje spelare tävlar för sig själv.' : 'Spelarna är deltagarna. Placera dem i lag under Spelare → Lag för att även få en lagtabell och kunna spela slutspel mellan lag.'}</p>
+        ${isTeamMode(t) ? `<label class="field" style="margin:12px 0 0"><span>Spelare per lag (0 = valfritt)</span><input type="number" min="0" id="setRoster" value="${t.settings.rosterSize || 0}"></label>` : ''}
+        <div class="row" style="margin-top:12px"><div class="grow"><div class="small muted">Format</div><b>${esc(isStages(t) ? presetName(t) : 'Poängliga')}</b></div><button class="btn small" data-action="changeFormat">Byt format</button></div>
       </section>
 
       <div class="section-title">Verktyg</div>
@@ -1656,7 +1672,7 @@
         <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
       </ul>
 
-      <div class="section-title">Poängräkning (${esc(t.name)})</div>
+      ${isStages(t) ? '' : `<div class="section-title">Poängräkning (${esc(t.name)})</div>
       <section class="card">
         <label class="field"><span>Räkna bara bästa X omgångar (0 = alla)</span><input type="number" min="0" id="setBestOf" value="${t.settings.bestOf || 0}"></label>
         <label class="field"><span>Snabbknappar för poäng (t.ex. 3, 1, 0)</span><input type="text" id="setQuick" value="${esc(t.settings.quickValues)}" placeholder="Tomt = inga snabbknappar"></label>
@@ -1670,7 +1686,7 @@
           </select>
         </label>
         ${t.settings.teamScoring === 'top' ? `<label class="field" style="margin:12px 0 0"><span>X = antal som räknas per lag</span><input type="number" min="1" id="setTeamTopN" value="${t.settings.teamTopN}"></label>` : ''}` : ''}
-      </section>
+      </section>`}
 
       <div class="section-title">Data & säkerhetskopia</div>
       <ul class="list">
@@ -1698,12 +1714,26 @@
           if (a.dataset.id !== db.activeId) {
             db.activeId = a.dataset.id;
             ui.roundId = null;
+            ui.stageIdx = null;
             poDraft = null;
             commit(`Bytte till ${T().name}`);
           }
           break;
         case 'newT':
           newTournamentDialog();
+          break;
+        case 'changeFormat':
+          presetPicker((p) => {
+            const go = () => {
+              checkpoint();
+              applyPreset(t, p);
+              poDraft = null;
+              commit(`Format: ${p.name}`, true);
+            };
+            if (t.stages.some((s) => s.status !== 'setup') || (t.format === 'league' && t.rounds.length && p.format !== 'league'))
+              confirmDialog('Byta format?', 'Pågående faser nollställs. Deltagare och poängomgångar finns kvar.', 'Byt format', go);
+            else go();
+          }, isStages(t) ? t.presetId : 'league');
           break;
         case 'mode':
           if (a.dataset.v !== t.mode) {
@@ -1729,6 +1759,13 @@
             });
             nt.teams = t.teams.map((x) => Object.assign({}, x));
             nt.settings = Object.assign({}, t.settings);
+            nt.format = t.format;
+            nt.presetId = t.presetId;
+            nt.stages = t.stages.map((s) => {
+              const c = SG.newStage(s.type, s.name);
+              c.cfg = Object.assign({}, s.cfg);
+              return c;
+            });
             db.tournaments[nt.id] = nt;
             db.activeId = nt.id;
             ui.roundId = null;
@@ -1781,6 +1818,9 @@
         t.settings.cutoff = Math.max(0, Math.round(Number(e.target.value) || 0));
         poDraft = null;
         commit('Sparat');
+      } else if (id === 'setRoster') {
+        t.settings.rosterSize = Math.max(0, Math.round(Number(e.target.value) || 0));
+        commit('Sparat');
       } else if (id === 'setTeamScoring') {
         t.settings.teamScoring = e.target.value;
         commit('Lagpoäng uppdaterad');
@@ -1793,16 +1833,21 @@
 
   function newTournamentDialog() {
     let mode = 'individual';
+    let preset = SG.PRESETS[0];
     openModal({
       title: 'Ny turnering',
       body: `
         <label class="field"><span>Namn</span><input type="text" id="ntName" maxlength="60" autofocus></label>
-        <div class="field"><span>Typ</span>
+        <div class="field"><span>Format</span>
+          <div class="preset-list compact">${SG.PRESETS.map((p, k) => `<button type="button" class="preset ${k === 0 ? 'on' : ''}" data-np="${p.id}"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`).join('')}</div>
+        </div>
+        <div class="field"><span>Deltagare</span>
           <div class="seg" style="margin:0">
-            <button type="button" data-mode="individual" class="on">Individuell</button>
-            <button type="button" data-mode="team">Lagturnering</button>
+            <button type="button" data-mode="individual" class="on">Spelare</button>
+            <button type="button" data-mode="team">Lag</button>
           </div>
         </div>
+        <label class="field" id="ntRosterWrap" hidden><span>Spelare per lag (0 = valfritt)</span><input type="number" id="ntRoster" min="0" value="5"></label>
         <p class="small muted" id="ntHelp"></p>`,
       actions: [
         { label: 'Avbryt' },
@@ -1816,26 +1861,37 @@
               return false;
             }
             const nt = newTournament(v, mode);
+            normalize(nt);
+            applyPreset(nt, preset);
+            nt.mode = mode;
+            nt.settings.rosterSize = mode === 'team' ? Math.max(0, Math.round(Number($('#ntRoster', w).value) || 0)) : 0;
             db.tournaments[nt.id] = nt;
             db.activeId = nt.id;
             ui.roundId = null;
+            ui.stageIdx = null;
             poDraft = null;
-            commit(`${v} skapad`);
+            if (isStages(nt)) ui.tab = 'players';
+            saveUi();
+            commit(`${v} skapad – lägg till ${W(nt).one}`);
           },
         },
       ],
       onOpen: (w) => {
-        const help = () =>
-          ($('#ntHelp', w).textContent =
-            mode === 'team'
-              ? 'Lagen är deltagarna – poäng matas in per lag.'
-              : 'Spelarna är deltagarna. De kan även placeras i lag för en lagtabell.');
-        help();
-        $$('[data-mode]', w).forEach((b) =>
+        const setMode = (m) => {
+          mode = m;
+          $$('[data-mode]', w).forEach((x) => x.classList.toggle('on', x.dataset.mode === m));
+          $('#ntRosterWrap', w).hidden = m !== 'team';
+          $('#ntHelp', w).textContent =
+            m === 'team' ? 'Lagen är deltagarna. Varje lag kan ha en spelarlista (t.ex. 5 spelare i CS2/Valorant).' : 'Varje spelare tävlar för sig själv.';
+        };
+        setMode('individual');
+        $$('[data-mode]', w).forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+        $$('[data-np]', w).forEach((b) =>
           b.addEventListener('click', () => {
-            mode = b.dataset.mode;
-            $$('[data-mode]', w).forEach((x) => x.classList.toggle('on', x === b));
-            help();
+            preset = SG.PRESETS.find((p) => p.id === b.dataset.np);
+            $$('[data-np]', w).forEach((x) => x.classList.toggle('on', x === b));
+            if (preset.mode) setMode(preset.mode);
+            if (preset.rosterSize) $('#ntRoster', w).value = preset.rosterSize;
           })
         );
       },
@@ -2180,6 +2236,849 @@
         );
       }
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Faser: gruppspel, Swiss, utslagning, dubbelutslagning, heat         */
+  /* ------------------------------------------------------------------ */
+
+  const SG = window.TStages;
+  const isStages = (t) => t.format === 'stages';
+  const BO_OPTIONS = [1, 2, 3, 5, 7];
+
+  function sameSet(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    const s = new Set(a);
+    return b.every((x) => s.has(x));
+  }
+
+  // Deltagare som går in i fas i (före eventuell egen seedning)
+  function defaultEntrants(t, i) {
+    if (i === 0) return t.players.filter((p) => p.active !== false).map((p) => p.id);
+    const prev = t.stages[i - 1];
+    if (!prev || !prev.data) return [];
+    return SG.resolve(prev).qualifiers;
+  }
+
+  function seedsFor(t, i) {
+    const st = t.stages[i];
+    const def = defaultEntrants(t, i);
+    return st.customSeeds && sameSet(st.customSeeds, def) ? st.customSeeds : def;
+  }
+
+  function canStart(t, i) {
+    const st = t.stages[i];
+    if (!st || st.status !== 'setup') return false;
+    if (i > 0) {
+      const prev = t.stages[i - 1];
+      if (prev.status === 'setup' || !SG.resolve(prev).done) return false;
+    }
+    return seedsFor(t, i).length >= 2;
+  }
+
+  function activeStageIndex(t) {
+    let idx = -1;
+    t.stages.forEach((s, i) => s.status !== 'setup' && (idx = i));
+    return idx;
+  }
+
+  function stageLocked(t, i) {
+    const next = t.stages[i + 1];
+    return !!(next && next.status !== 'setup');
+  }
+
+  function boText(bo) {
+    if (!bo) return '';
+    return `Bo${bo}`;
+  }
+
+  function stageSummary(st) {
+    const c = st.cfg;
+    switch (st.type) {
+      case 'gsl':
+        return `${c.groups} grupper · topp ${c.advancePerGroup} vidare · ${boText(c.bo)}`;
+      case 'rr':
+        return `${c.groups} ${c.groups === 1 ? 'grupp' : 'grupper'} · topp ${c.advancePerGroup} vidare · ${boText(c.bo)} · ${c.pointsWin}/${c.pointsDraw}/${c.pointsLoss} p${c.doubleRound ? ' · dubbelmöten' : ''}`;
+      case 'swiss':
+        return `${c.winsToAdvance} vinster vidare · ${c.lossesToElim} förluster ute · ${boText(c.bo)}, avgörande ${boText(c.decisiveBo)}`;
+      case 'single':
+        return `${boText(c.bo)} · semifinal ${boText(c.semiBo)} · final ${boText(c.finalBo)}${c.third ? ' · bronsmatch' : ''}`;
+      case 'double':
+        return `${boText(c.bo)} · övre final ${boText(c.ubFinalBo)} · undre final ${boText(c.lbFinalBo)} · final ${boText(c.gfBo)}${c.gfReset ? ' (med omstart)' : ''}`;
+      case 'heats':
+        return `${c.heatSize} per heat · topp ${c.advancePerHeat} vidare · ${c.races} ${c.races === 1 ? 'race' : 'race'} per heat`;
+    }
+    return '';
+  }
+
+  function presetName(t) {
+    const p = SG.PRESETS.find((x) => x.id === t.presetId);
+    return p ? p.name : 'Anpassat';
+  }
+
+  function applyPreset(t, preset) {
+    if (preset.format === 'league') {
+      t.format = 'league';
+      t.stages = [];
+    } else {
+      t.format = 'stages';
+      t.stages = SG.stagesFromPreset(preset);
+    }
+    t.presetId = preset.id;
+    if (!t.players.length && preset.mode) t.mode = preset.mode;
+    if (preset.rosterSize) t.settings.rosterSize = preset.rosterSize;
+  }
+
+  function presetPicker(onPick, current) {
+    openModal({
+      title: 'Välj format',
+      body: `<div class="preset-list">${SG.PRESETS.map(
+        (p) => `<button class="preset ${p.id === current ? 'on' : ''}" data-preset="${p.id}">
+          <b>${esc(p.name)}</b><span>${esc(p.desc)}</span>
+          <span class="preset-tags">${p.mode === 'team' ? `<i>Lag${p.rosterSize ? ' om ' + p.rosterSize : ''}</i>` : '<i>Individuell</i>'}${(p.stages || []).map((s) => `<i>${esc(SG.TYPES[s.type].short)}</i>`).join('')}</span>
+        </button>`
+      ).join('')}</div>`,
+      onOpen: (w, close) =>
+        $$('[data-preset]', w).forEach((b) =>
+          b.addEventListener('click', () => {
+            close();
+            onPick(SG.PRESETS.find((p) => p.id === b.dataset.preset));
+          })
+        ),
+    });
+  }
+
+  function participantName(t, id) {
+    return id ? pname(t, id) : '';
+  }
+
+  /* ----------------------------- Format ----------------------------- */
+
+  function renderStageFormat(view, t) {
+    const started = t.stages.some((s) => s.status !== 'setup');
+    const last = t.stages[t.stages.length - 1];
+    const lastR = last && last.data ? SG.resolve(last) : null;
+    let html = '';
+    if (lastR && lastR.done) html += championBanner(t, lastR) + placementsCard(t, lastR);
+
+    html += `
+      <section class="card">
+        <div class="row">
+          <div class="grow"><h3 style="margin:0">${esc(presetName(t))}</h3><div class="small muted">${t.stages.length} ${t.stages.length === 1 ? 'fas' : 'faser'} · ${defaultEntrants(t, 0).length} ${W(t).one} anmälda</div></div>
+          <button class="btn small" data-action="preset">Byt format</button>
+        </div>
+      </section>`;
+
+    t.stages.forEach((st, i) => {
+      const R = st.data ? SG.resolve(st) : null;
+      const status = st.status === 'setup' ? (canStart(t, i) ? 'Redo att starta' : 'Ej startad') : R && R.done ? 'Klar' : 'Pågår';
+      const pill = st.status === 'setup' ? (canStart(t, i) ? 'ready' : 'idle') : R && R.done ? 'done' : 'live';
+      html += `
+        <section class="card stage-card">
+          <div class="row">
+            <span class="stage-no">${i + 1}</span>
+            <div class="grow"><h3 style="margin:0">${esc(st.name)}</h3><div class="small muted">${esc(SG.TYPES[st.type].label)}</div></div>
+            <span class="pill ${pill}">${status}</span>
+          </div>
+          <p class="small" style="margin:8px 0 0">${esc(stageSummary(st))}</p>
+          ${st.status === 'setup' ? stageConfigForm(t, st, i) : ''}
+          ${st.status === 'setup' && canStart(t, i) ? seedingEditor(t, i) : ''}
+          ${st.status === 'setup' && !canStart(t, i) ? `<p class="small muted" style="margin-top:10px">${i === 0 ? `Lägg till minst 2 ${W(t).one} för att starta.` : 'Startar när föregående fas är klar.'}</p>` : ''}
+          <div class="row wrap" style="margin-top:12px">
+            ${st.status === 'setup' && canStart(t, i) ? `<button class="btn primary" data-action="startStage" data-i="${i}">${icon('trophy')}Starta ${esc(st.name.toLowerCase())}</button>` : ''}
+            ${st.status !== 'setup' ? `<button class="btn small" data-action="openStage" data-i="${i}">Visa ${R && R.done ? 'resultat' : 'bracket'}</button>` : ''}
+            ${st.status !== 'setup' ? `<button class="btn small danger-text" data-action="resetStage" data-i="${i}">Återställ fas</button>` : ''}
+            ${st.status === 'setup' ? `
+              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="-1" aria-label="Flytta upp" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="1" aria-label="Flytta ner" ${i === t.stages.length - 1 ? 'disabled' : ''}>▼</button>
+              <button class="btn small ghost danger-text" data-action="delStage" data-i="${i}">${icon('del')}Ta bort fas</button>` : ''}
+          </div>
+        </section>`;
+    });
+
+    html += `<button class="btn block" data-action="addStage" ${started && last && last.status !== 'setup' && lastR && lastR.done ? '' : ''}>${icon('add')}Lägg till fas</button>`;
+    if (!t.stages.length) html += `<p class="small muted" style="text-align:center">Välj en mall eller lägg till faser själv.</p>`;
+    view.innerHTML = html;
+
+    view.onclick = (e) => {
+      const a = e.target.closest('[data-action]');
+      if (!a) return;
+      const i = Number(a.dataset.i);
+      const st = t.stages[i];
+      switch (a.dataset.action) {
+        case 'preset':
+          presetPicker((p) => {
+            const go = () => {
+              checkpoint();
+              applyPreset(t, p);
+              commit(`Format: ${p.name}`, true);
+            };
+            if (started) confirmDialog('Byta format?', 'Alla faser och resultat i turneringen nollställs. Deltagarna finns kvar.', 'Byt format', go);
+            else go();
+          }, t.presetId);
+          break;
+        case 'addStage':
+          addStageDialog(t);
+          break;
+        case 'delStage':
+          checkpoint();
+          t.stages.splice(i, 1);
+          t.presetId = 'custom';
+          commit('Fasen borttagen', true);
+          break;
+        case 'moveStage': {
+          const j = i + Number(a.dataset.d);
+          if (j < 0 || j >= t.stages.length || t.stages[j].status !== 'setup') return;
+          [t.stages[i], t.stages[j]] = [t.stages[j], t.stages[i]];
+          t.presetId = 'custom';
+          commit();
+          break;
+        }
+        case 'startStage': {
+          const seeds = seedsFor(t, i);
+          const problem = startProblem(st, seeds.length);
+          if (problem) {
+            toast(problem);
+            return;
+          }
+          SG.start(st, seeds);
+          ui.stageIdx = i;
+          commit(`${st.name} har startat!`);
+          break;
+        }
+        case 'openStage':
+          ui.stageIdx = i;
+          setTab('table');
+          break;
+        case 'resetStage':
+          confirmDialog(
+            'Återställa fasen?',
+            `Alla resultat i ${st.name}${i < t.stages.length - 1 ? ' och senare faser' : ''} tas bort.`,
+            'Återställ',
+            () => {
+              checkpoint();
+              for (let k = i; k < t.stages.length; k++) SG.reset(t.stages[k]);
+              commit(`${st.name} återställd`, true);
+            }
+          );
+          break;
+        case 'seedUp':
+        case 'seedDown': {
+          const seeds = seedsFor(t, i).slice();
+          const k = Number(a.dataset.k);
+          const j = k + (a.dataset.action === 'seedUp' ? -1 : 1);
+          if (j < 0 || j >= seeds.length) return;
+          [seeds[k], seeds[j]] = [seeds[j], seeds[k]];
+          st.customSeeds = seeds;
+          save();
+          render();
+          break;
+        }
+        case 'seedShuffle':
+          st.customSeeds = L.shuffle(seedsFor(t, i));
+          commit('Seedningen slumpades');
+          break;
+        case 'seedReset':
+          st.customSeeds = null;
+          commit('Seedningen återställd');
+          break;
+      }
+    };
+    view.onchange = (e) => {
+      const el = e.target;
+      if (!el.dataset.cfg) return;
+      const st = t.stages[Number(el.dataset.i)];
+      const key = el.dataset.cfg;
+      if (key === 'name') st.name = el.value.trim() || SG.TYPES[st.type].short;
+      else if (el.type === 'checkbox') st.cfg[key] = el.checked;
+      else if (el.dataset.kind === 'text') st.cfg[key] = el.value;
+      else {
+        const v = Math.round(Number(el.value));
+        if (!isFinite(v)) return;
+        st.cfg[key] = Math.max(Number(el.min || 0), v);
+      }
+      t.presetId = t.presetId === 'league' ? 'custom' : t.presetId;
+      commit();
+    };
+  }
+
+  function startProblem(st, n) {
+    const c = st.cfg;
+    if (st.type === 'heats' && c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än heatstorleken';
+    if (st.type === 'double' && n < 3) return 'Dubbelutslagning kräver minst 3 deltagare';
+    if (st.type === 'swiss' && n < 4) return 'Swiss kräver minst 4 deltagare';
+    if ((st.type === 'gsl' || st.type === 'rr') && c.groups < 1) return 'Minst 1 grupp';
+    return '';
+  }
+
+  function cfgField(i, key, label, value, opts) {
+    opts = opts || {};
+    if (opts.bo) {
+      return `<label class="field"><span>${label}</span><select data-cfg="${key}" data-i="${i}">${BO_OPTIONS.map((b) => `<option value="${b}" ${b === value ? 'selected' : ''}>Bo${b}</option>`).join('')}</select></label>`;
+    }
+    if (opts.check) return `<label class="check"><input type="checkbox" data-cfg="${key}" data-i="${i}" ${value ? 'checked' : ''}> ${label}</label>`;
+    if (opts.text) return `<label class="field"><span>${label}</span><input type="text" data-kind="text" data-cfg="${key}" data-i="${i}" value="${esc(value)}"></label>`;
+    return `<label class="field"><span>${label}</span><input type="number" inputmode="numeric" data-cfg="${key}" data-i="${i}" min="${opts.min != null ? opts.min : 0}" value="${value}"></label>`;
+  }
+
+  function stageConfigForm(t, st, i) {
+    const c = st.cfg;
+    const n = seedsFor(t, i).length || defaultEntrants(t, 0).length;
+    const isLast = i === t.stages.length - 1;
+    let f = cfgField(i, 'name', 'Namn på fasen', st.name, { text: true }).replace('data-kind="text" data-cfg="name"', 'data-cfg="name"');
+    let hint = '';
+    switch (st.type) {
+      case 'gsl':
+        f += `<div class="cfg-grid">${cfgField(i, 'groups', 'Antal grupper', c.groups, { min: 1 })}${cfgField(i, 'advancePerGroup', 'Vidare per grupp', c.advancePerGroup, { min: 1 })}</div>`;
+        f += `<div class="cfg-grid">${cfgField(i, 'bo', 'Matcher', c.bo, { bo: true })}${cfgField(i, 'deciderBo', 'Avgörande match', c.deciderBo, { bo: true })}</div>`;
+        if (n) hint = `${n} ${W(t).one} → ${c.groups} grupper om ca ${Math.ceil(n / c.groups)}. ${c.groups * c.advancePerGroup} går vidare.${Math.ceil(n / c.groups) > 4 ? ' GSL-grupper har max 4 – lägg till fler grupper.' : ''}`;
+        break;
+      case 'rr':
+        f += `<div class="cfg-grid">${cfgField(i, 'groups', 'Antal grupper', c.groups, { min: 1 })}${cfgField(i, 'advancePerGroup', 'Vidare per grupp', c.advancePerGroup, { min: 0 })}</div>`;
+        f += cfgField(i, 'bo', 'Matcher', c.bo, { bo: true });
+        f += `<div class="cfg-grid three">${cfgField(i, 'pointsWin', 'Poäng vinst', c.pointsWin)}${cfgField(i, 'pointsDraw', 'Oavgjort', c.pointsDraw)}${cfgField(i, 'pointsLoss', 'Förlust', c.pointsLoss)}</div>`;
+        f += cfgField(i, 'allowDraw', 'Tillåt oavgjort', c.allowDraw, { check: true }) + cfgField(i, 'doubleRound', 'Mötas två gånger (hemma/borta)', c.doubleRound, { check: true });
+        if (n) hint = `${n} ${W(t).one} → ${c.groups} ${c.groups === 1 ? 'grupp' : 'grupper'} om ca ${Math.ceil(n / c.groups)}.`;
+        break;
+      case 'swiss':
+        f += `<div class="cfg-grid">${cfgField(i, 'winsToAdvance', 'Vinster för att gå vidare', c.winsToAdvance, { min: 1 })}${cfgField(i, 'lossesToElim', 'Förluster för att åka ut', c.lossesToElim, { min: 1 })}</div>`;
+        f += `<div class="cfg-grid">${cfgField(i, 'bo', 'Matcher', c.bo, { bo: true })}${cfgField(i, 'decisiveBo', 'Avgörande matcher', c.decisiveBo, { bo: true })}</div>`;
+        hint = 'Avgörande = matcher där någon kan gå vidare eller åka ut.';
+        break;
+      case 'single':
+        f += `<div class="cfg-grid three">${cfgField(i, 'bo', 'Matcher', c.bo, { bo: true })}${cfgField(i, 'semiBo', 'Semifinal', c.semiBo, { bo: true })}${cfgField(i, 'finalBo', 'Final', c.finalBo, { bo: true })}</div>`;
+        f += cfgField(i, 'third', 'Match om tredjepris', c.third, { check: true });
+        if (!isLast) f += cfgField(i, 'advance', 'Antal vidare till nästa fas (0 = alla)', c.advance);
+        if (n) hint = `${n} ${W(t).one}${L.nextPow2(n) > n ? ` – ${L.nextPow2(n) - n} topp-seedade får walk over` : ''}.`;
+        break;
+      case 'double':
+        f += `<div class="cfg-grid">${cfgField(i, 'bo', 'Matcher', c.bo, { bo: true })}${cfgField(i, 'ubFinalBo', 'Övre final', c.ubFinalBo, { bo: true })}</div>`;
+        f += `<div class="cfg-grid">${cfgField(i, 'lbFinalBo', 'Undre final', c.lbFinalBo, { bo: true })}${cfgField(i, 'gfBo', 'Final', c.gfBo, { bo: true })}</div>`;
+        f += cfgField(i, 'gfReset', 'Omstart om laget från undre trädet vinner finalen', c.gfReset, { check: true });
+        if (!isLast) f += cfgField(i, 'advance', 'Antal vidare till nästa fas (0 = alla)', c.advance);
+        if (n) hint = `${n} ${W(t).one}${L.nextPow2(Math.max(n, 4)) > n ? ` – ${L.nextPow2(Math.max(n, 4)) - n} topp-seedade får walk over` : ''}.`;
+        break;
+      case 'heats':
+        f += `<div class="cfg-grid three">${cfgField(i, 'heatSize', 'Per heat', c.heatSize, { min: 2 })}${cfgField(i, 'advancePerHeat', 'Vidare per heat', c.advancePerHeat, { min: 1 })}${cfgField(i, 'races', 'Race per heat', c.races, { min: 1 })}</div>`;
+        f += cfgField(i, 'points', 'Poäng per placering (1:a, 2:a, 3:e …)', c.points, { text: true });
+        if (!isLast) f += cfgField(i, 'advance', 'Antal vidare till nästa fas (0 = alla)', c.advance);
+        if (n) hint = heatPlan(n, c);
+        break;
+    }
+    return `<details class="cfg"><summary>Inställningar</summary><div class="cfg-body">${f}${hint ? `<p class="small muted" style="margin:0">${esc(hint)}</p>` : ''}</div></details>`;
+  }
+
+  function heatPlan(n, c) {
+    if (c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än antal per heat.';
+    const steps = [];
+    let left = n;
+    for (let guard = 0; guard < 12 && left > c.heatSize; guard++) {
+      const heats = Math.ceil(left / c.heatSize);
+      steps.push(`${left} → ${heats} heat`);
+      const next = Math.min(left, heats * c.advancePerHeat);
+      if (next >= left) break;
+      left = next;
+    }
+    steps.push(`final med ${left}`);
+    return steps.join(' · ');
+  }
+
+  function seedingEditor(t, i) {
+    const seeds = seedsFor(t, i);
+    const st = t.stages[i];
+    return `<details class="cfg" ${st.customSeeds ? 'open' : ''}><summary>Seedning (${seeds.length})</summary><div class="cfg-body">
+      <div class="row wrap"><button class="btn small" data-action="seedShuffle" data-i="${i}">${icon('shuffle')}Slumpa</button>${st.customSeeds ? `<button class="btn small ghost" data-action="seedReset" data-i="${i}">Återställ</button>` : ''}</div>
+      <ol class="seed-list">${seeds
+        .map(
+          (id, k) => `<li><span class="seedno">${k + 1}</span><span class="grow">${esc(pname(t, id))}</span>
+          <button class="icon-btn" data-action="seedUp" data-i="${i}" data-k="${k}" aria-label="Upp" ${k === 0 ? 'disabled' : ''}>▲</button>
+          <button class="icon-btn" data-action="seedDown" data-i="${i}" data-k="${k}" aria-label="Ner" ${k === seeds.length - 1 ? 'disabled' : ''}>▼</button></li>`
+        )
+        .join('')}</ol>
+      <p class="small muted" style="margin:0">${i === 0 ? `Ordningen kommer från listan under ${W(t).One}.` : 'Ordningen kommer från resultatet i föregående fas.'} Seed 1 är starkast.</p>
+    </div></details>`;
+  }
+
+  function addStageDialog(t) {
+    openModal({
+      title: 'Lägg till fas',
+      body: `<div class="preset-list">${Object.entries(SG.TYPES)
+        .map(([k, v]) => `<button class="preset" data-type="${k}"><b>${esc(v.label)}</b><span>${esc(v.desc)}</span></button>`)
+        .join('')}</div>`,
+      onOpen: (w, close) =>
+        $$('[data-type]', w).forEach((b) =>
+          b.addEventListener('click', () => {
+            close();
+            const st = SG.newStage(b.dataset.type);
+            if (t.stages.length) st.name = b.dataset.type === 'single' || b.dataset.type === 'double' ? 'Slutspel' : st.name;
+            t.stages.push(st);
+            t.format = 'stages';
+            t.presetId = 'custom';
+            commit(`${SG.TYPES[st.type].label} tillagd`);
+          })
+        ),
+    });
+  }
+
+  function championBanner(t, R) {
+    if (!R.champion) return '';
+    const second = R.placements[1] || [];
+    const third = R.placements[2] || [];
+    return `
+      <div class="champion">
+        ${icon('trophy')}
+        <div class="small">Vinnare</div>
+        <div class="cname">${esc(pname(t, R.champion))}</div>
+        <div class="podium">
+          ${second.length ? `<span>🥈 ${esc(second.map((id) => pname(t, id)).join(', '))}</span>` : ''}
+          ${third.length ? `<span>🥉 ${esc(third.map((id) => pname(t, id)).join(', '))}</span>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function placementsCard(t, R) {
+    let pos = 1;
+    const rows = R.placements
+      .map((tier) => {
+        const label = tier.length > 1 ? `${pos}–${pos + tier.length - 1}` : `${pos}`;
+        pos += tier.length;
+        return `<li><span class="seedno">${label}.</span><span>${esc(tier.map((id) => pname(t, id)).join(', '))}</span></li>`;
+      })
+      .join('');
+    return `<section class="card"><h3>Slutplaceringar</h3><ol class="qual-list">${rows}</ol>
+      <button class="btn small" data-share-final style="margin-top:10px">${icon('share')}Dela resultat</button></section>`;
+  }
+
+  function finalText(t, R) {
+    let pos = 1;
+    const lines = [`${t.name} – Resultat`, ''];
+    R.placements.forEach((tier) => {
+      const label = tier.length > 1 ? `${pos}–${pos + tier.length - 1}` : `${pos}`;
+      pos += tier.length;
+      lines.push(`${label}. ${tier.map((id) => pname(t, id)).join(', ')}`);
+    });
+    return lines.join('\n');
+  }
+
+  /* ----------------------------- Matcher ---------------------------- */
+
+  function pickStage(t) {
+    const started = t.stages.map((s, i) => i).filter((i) => t.stages[i].status !== 'setup');
+    if (!started.length) return -1;
+    if (ui.stageIdx == null || !started.includes(ui.stageIdx)) ui.stageIdx = started[started.length - 1];
+    return ui.stageIdx;
+  }
+
+  function stageChips(t, cur) {
+    if (t.stages.length < 2) return '';
+    return `<div class="chips">${t.stages
+      .map((s, i) => `<button class="chip ${i === cur ? 'on' : ''}" data-action="selStage" data-i="${i}" ${s.status === 'setup' ? 'disabled' : ''}>${esc(s.name)}${s.status === 'setup' ? ' 🔒' : ''}</button>`)
+      .join('')}</div>`;
+  }
+
+  function noStageState(view, t) {
+    view.innerHTML = emptyState('trophy', 'Ingen fas har startat', t.stages.length ? 'Gå till Format för att kontrollera inställningar och seedning och starta första fasen.' : 'Välj ett format först, t.ex. Valorant Champions, CS Major eller Mario Kart.', 'Gå till Format', 'goFormat');
+    view.onclick = (e) => e.target.closest('[data-action="goFormat"]') && setTab('playoff');
+  }
+
+  function nextStageBanner(t, i, R) {
+    if (!R.done) return '';
+    const next = t.stages[i + 1];
+    if (!next) return '';
+    if (next.status !== 'setup') return '';
+    return `<div class="banner">${icon('trophy')}<div class="grow"><b>${esc(t.stages[i].name)} är klar!</b><div class="small">${R.qualifiers.length} går vidare till ${esc(next.name)}.</div></div><button class="btn small primary" data-action="goFormat">Till nästa fas</button></div>`;
+  }
+
+  function matchLine(t, m, i) {
+    const name = (id, side) => {
+      if (id) return esc(pname(t, id));
+      return m.state === 'bye' ? '<i class="muted">Walk over</i>' : '<i class="muted">Väntar…</i>';
+    };
+    const cls = (id) => (m.winner && id === m.winner ? 'win' : m.winner && id ? 'lose' : '');
+    const score = (v) => (v != null ? fmt(v) : '');
+    return `<button class="mline ${m.state}" data-action="match" data-i="${i}" data-id="${m.id}">
+      <span class="mline-meta">${esc(m.groupName ? m.groupName + ' · ' : '')}${esc(m.label || '')}${m.bo ? ` · ${boText(m.bo)}` : ''}</span>
+      <span class="mline-row ${cls(m.a)}"><span class="pn">${name(m.a)}</span><span class="ps">${score(m.sa)}</span></span>
+      <span class="mline-row ${cls(m.b)}"><span class="pn">${name(m.b)}</span><span class="ps">${score(m.sb)}</span></span>
+      ${m.draw ? '<span class="mline-meta">Oavgjort</span>' : ''}
+      ${m.note ? `<span class="mline-note">${esc(m.note)}</span>` : ''}
+    </button>`;
+  }
+
+  function decorate(R) {
+    if (R.groups) R.groups.forEach((g) => g.matches.forEach((m) => (m.groupName = g.name)));
+    if (R.groups) {
+      const byId = {};
+      R.groups.forEach((g) => g.matches.forEach((m) => (byId[m.id] = g.name)));
+      R.matches.forEach((m) => byId[m.id] && (m.groupName = byId[m.id]));
+    }
+    return R;
+  }
+
+  function renderStageMatches(view, t) {
+    const i = pickStage(t);
+    if (i < 0) return noStageState(view, t);
+    const st = t.stages[i];
+    const R = decorate(SG.resolve(st));
+    let html = stageChips(t, i) + nextStageBanner(t, i, R);
+    if (st.type === 'heats') {
+      const rd = R.rounds[R.rounds.length - 1];
+      html += `<div class="section-title">${esc(rd.name)} ${rd.complete ? '· klar' : ''}</div>`;
+      html += `<div class="heat-grid">${rd.heats.map((h) => heatCard(t, h, i, st)).join('')}</div>`;
+      if (R.rounds.length > 1) html += `<p class="small muted" style="text-align:center">Tidigare rundor syns under Bracket.</p>`;
+    } else {
+      const ready = R.matches.filter((m) => m.state === 'ready');
+      const done = R.matches.filter((m) => m.state === 'done').reverse();
+      const pending = R.matches.filter((m) => m.state === 'pending');
+      html += `<div class="section-title">Att spela (${ready.length})</div>`;
+      html += ready.length ? `<div class="mlist">${ready.map((m) => matchLine(t, m, i)).join('')}</div>` : `<p class="small muted">${R.done ? 'Alla matcher är spelade.' : 'Inga matcher redo just nu.'}</p>`;
+      if (pending.length) html += `<p class="small muted">${pending.length} ${pending.length === 1 ? 'match väntar' : 'matcher väntar'} på tidigare resultat.</p>`;
+      if (done.length) html += `<div class="section-title">Spelade (${done.length})</div><div class="mlist">${done.map((m) => matchLine(t, m, i)).join('')}</div>`;
+    }
+    view.innerHTML = html;
+    view.onclick = (e) => stageClick(e, t);
+  }
+
+  function stageClick(e, t) {
+    const a = e.target.closest('[data-action]');
+    if (!a) return;
+    if (e.target.closest('[data-share-final]')) return;
+    const i = Number(a.dataset.i);
+    if (a.dataset.action === 'selStage') {
+      ui.stageIdx = i;
+      render();
+    } else if (a.dataset.action === 'goFormat') setTab('playoff');
+    else if (a.dataset.action === 'match') stageMatchDialog(t, i, a.dataset.id);
+    else if (a.dataset.action === 'heat') heatDialog(t, i, a.dataset.id);
+  }
+
+  function heatCard(t, h, i, st) {
+    return `<button class="heat ${h.complete ? 'done' : ''} ${h.isFinal ? 'final' : ''}" data-action="heat" data-i="${i}" data-id="${h.id}">
+      <span class="heat-head"><b>${h.isFinal ? 'Final' : 'Heat ' + (h.index + 1)}</b><span class="small muted">${h.complete ? 'Klar' : h.started ? 'Pågår' : 'Ej kört'}</span></span>
+      ${h.rows
+        .map(
+          (r) => `<span class="heat-row ${r.status}"><span class="hpos">${h.started ? r.pos : ''}</span><span class="pn">${esc(pname(t, r.id))}</span><span class="ps">${h.started ? fmt(r.total) + ' p' : ''}</span></span>`
+        )
+        .join('')}
+    </button>`;
+  }
+
+  function afterStageChange(t, i, before) {
+    const st = t.stages[i];
+    let guard = 0;
+    while (SG.progress(st) && guard++ < 20);
+    save();
+    render();
+    const R = SG.resolve(st);
+    const isLast = i === t.stages.length - 1;
+    if (R.done && !(before && before.done)) {
+      if (isLast && R.champion) {
+        toast(`🏆 ${pname(t, R.champion)} vinner ${t.name}!`);
+        vibrate([200, 100, 200]);
+      } else toast(`${st.name} är klar! ${isLast ? '' : 'Starta nästa fas under Format.'}`);
+    } else if (before && st.type !== 'heats') {
+      const lost = before.matches.filter((m) => m.state === 'done').length - R.matches.filter((m) => m.state === 'done').length;
+      if (lost > 0) toast(`Obs: ${lost} senare ${lost === 1 ? 'match' : 'matcher'} påverkades och måste spelas om`);
+    }
+  }
+
+  function stageMatchDialog(t, i, id) {
+    const st = t.stages[i];
+    const before = decorate(SG.resolve(st));
+    const m = before.matches.find((x) => x.id === id);
+    if (!m) return;
+    if (m.state === 'bye') return toast(`${pname(t, m.winner)} går vidare på walk over`);
+    if (m.state === 'pending' || m.state === 'empty' || m.state === 'skip') return toast('Matchen är inte klar – tidigare matcher måste spelas först');
+    if (stageLocked(t, i)) return toast('Nästa fas har startat – återställ den under Format för att ändra här');
+    if (SG.isLocked(st, m)) return toast('Senare omgångar bygger på detta resultat och kan inte ändras');
+    const need = SG.winsNeeded(m.bo);
+    const allowDraw = st.type === 'rr' && st.cfg.allowDraw;
+    let selected = m.draw ? 'draw' : m.winner;
+    const side = (s) => {
+      const pid = m[s];
+      const score = s === 'a' ? m.sa : m.sb;
+      return `
+        <div class="mp-side ${selected === pid ? 'sel' : ''}" data-id="${pid}">
+          <svg class="crown" viewBox="0 0 24 24"><path d="${ICONS.crown}"/></svg>
+          <div class="grow">${esc(pname(t, pid))}<div class="small muted">Seed ${before.seedOf[pid] || '–'}${rosterLine(t, pid)}</div></div>
+          <input type="number" step="any" min="0" placeholder="–" data-side="${s}" value="${score != null ? score : ''}" aria-label="Resultat">
+        </div>`;
+    };
+    openModal({
+      title: (m.groupName ? m.groupName + ' · ' : '') + (m.label || 'Match'),
+      body: `
+        <p class="small muted" style="margin-top:0">${m.bo > 1 ? `Best of ${m.bo} – först till ${need} vunna kartor/matcher.` : 'En match (Bo1). Skriv t.ex. rundor 13–9.'}</p>
+        <div class="mp">${side('a')}${side('b')}</div>
+        ${allowDraw ? `<button class="btn small block ${selected === 'draw' ? 'primary' : ''}" id="drawBtn" style="margin-top:10px">Oavgjort</button>` : ''}
+        <label class="field" style="margin-top:12px"><span>Kommentar (valfritt, t.ex. kartor)</span><input type="text" id="mNote" value="${esc(m.note || '')}" placeholder="Mirage 13–9, Inferno 11–13, Nuke 13–7"></label>`,
+      actions: [
+        {
+          label: 'Rensa',
+          onClick: () => {
+            SG.setResult(st, m, null, null, null, '');
+            afterStageChange(t, i, before);
+          },
+        },
+        {
+          label: 'Spara',
+          cls: 'primary',
+          onClick: (w) => {
+            const sa = parseNum($('input[data-side="a"]', w).value);
+            const sb = parseNum($('input[data-side="b"]', w).value);
+            if (Number.isNaN(sa) || Number.isNaN(sb)) {
+              toast('Ogiltigt resultat');
+              return false;
+            }
+            if (!selected) {
+              toast('Välj vinnare genom att trycka på laget');
+              return false;
+            }
+            SG.setResult(st, m, selected, sa, sb, $('#mNote', w).value.trim());
+            afterStageChange(t, i, before);
+          },
+        },
+      ],
+      onOpen: (w) => {
+        const sync = () => {
+          $$('.mp-side', w).forEach((el) => el.classList.toggle('sel', el.dataset.id === selected));
+          const d = $('#drawBtn', w);
+          if (d) d.classList.toggle('primary', selected === 'draw');
+        };
+        $$('.mp-side', w).forEach((el) =>
+          el.addEventListener('click', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            selected = el.dataset.id;
+            sync();
+          })
+        );
+        const d = $('#drawBtn', w);
+        if (d) d.addEventListener('click', () => ((selected = 'draw'), sync()));
+        $$('input[data-side]', w).forEach((inp) =>
+          inp.addEventListener('input', () => {
+            const sa = parseNum($('input[data-side="a"]', w).value);
+            const sb = parseNum($('input[data-side="b"]', w).value);
+            if (!L.isNum(sa) || !L.isNum(sb)) return;
+            if (sa !== sb) selected = sa > sb ? m.a : m.b;
+            else if (allowDraw) selected = 'draw';
+            sync();
+          })
+        );
+      },
+    });
+  }
+
+  function rosterLine(t, id) {
+    const p = playerById(t, id);
+    if (!p || !p.members || !p.members.length) return '';
+    return ' · ' + esc(p.members.join(', '));
+  }
+
+  function heatDialog(t, i, heatId) {
+    const st = t.stages[i];
+    const R = SG.resolve(st);
+    let heat = null;
+    R.rounds.forEach((rd) => rd.heats.forEach((h) => h.id === heatId && (heat = h)));
+    if (!heat) return;
+    if (stageLocked(t, i) || SG.isLocked(st, heat)) return toast('Senare rundor bygger på detta heat och kan inte ändras');
+    const n = heat.players.length;
+    const raceCount = st.cfg.races;
+    const pts = SG.parsePoints(st.cfg.points);
+    const prev = (st.results[heatId] && st.results[heatId].races) || [];
+    const races = Array.from({ length: raceCount }, (_, r) => Object.assign({}, prev[r] || {}));
+    let cur = 0;
+    const players = heat.players.slice();
+    const body = () => `
+      ${raceCount > 1 ? `<div class="seg">${races.map((_, r) => `<button data-race="${r}" class="${r === cur ? 'on' : ''}">Race ${r + 1}</button>`).join('')}</div>` : ''}
+      <p class="small muted" style="margin-top:0">Tryck på placeringen för varje ${isTeamMode(t) ? 'lag' : 'spelare'}${raceCount > 1 ? ` i race ${cur + 1}` : ''}.</p>
+      <div class="pos-list">${players
+        .map((p) => {
+          const total = races.reduce((s, race) => s + (race[p] ? pts[race[p] - 1] || 0 : 0), 0);
+          return `<div class="pos-row"><div class="grow"><b>${esc(pname(t, p))}</b><div class="small muted">${fmt(total)} p totalt</div></div>
+            <div class="pos-btns">${Array.from({ length: n }, (_, k) => `<button data-p="${p}" data-pos="${k + 1}" class="${races[cur][p] === k + 1 ? 'on' : ''}">${k + 1}</button>`).join('')}</div></div>`;
+        })
+        .join('')}</div>
+      <p class="small muted">Poäng: ${pts.slice(0, n).map((x, k) => `${k + 1}:a ${x}`).join(' · ')}</p>`;
+    openModal({
+      title: (heat.isFinal ? 'Final' : `Heat ${heat.index + 1}`) + (R.rounds.length > 1 && !heat.isFinal ? ` · runda ${heat.round + 1}` : ''),
+      body: `<div id="heatBody">${body()}</div>`,
+      actions: [
+        {
+          label: 'Rensa',
+          onClick: () => {
+            const before = SG.resolve(st);
+            delete st.results[heatId];
+            afterStageChange(t, i, before);
+          },
+        },
+        {
+          label: 'Spara',
+          cls: 'primary',
+          onClick: () => {
+            const before = SG.resolve(st);
+            SG.setHeatResult(st, heatId, races);
+            afterStageChange(t, i, before);
+          },
+        },
+      ],
+      onOpen: (w) => {
+        const box = $('#heatBody', w);
+        box.addEventListener('click', (e) => {
+          const rb = e.target.closest('[data-race]');
+          if (rb) {
+            cur = Number(rb.dataset.race);
+            box.innerHTML = body();
+            return;
+          }
+          const b = e.target.closest('[data-pos]');
+          if (!b) return;
+          const p = b.dataset.p;
+          const pos = Number(b.dataset.pos);
+          const race = races[cur];
+          if (race[p] === pos) delete race[p];
+          else {
+            // Byt plats med den som hade placeringen
+            const other = Object.keys(race).find((q) => race[q] === pos);
+            if (other) {
+              if (race[p]) race[other] = race[p];
+              else delete race[other];
+            }
+            race[p] = pos;
+            // Sista lediga placeringen fylls i automatiskt
+            const free = players.filter((q) => !race[q]);
+            if (free.length === 1) {
+              const used = new Set(Object.values(race));
+              for (let k = 1; k <= n; k++) if (!used.has(k)) race[free[0]] = k;
+            }
+          }
+          box.innerHTML = body();
+        });
+      },
+    });
+  }
+
+  /* ----------------------------- Bracket ---------------------------- */
+
+  function renderStageBracket(view, t) {
+    const i = pickStage(t);
+    if (i < 0) return noStageState(view, t);
+    const st = t.stages[i];
+    const R = decorate(SG.resolve(st));
+    const last = i === t.stages.length - 1;
+    topAction('share', 'Dela', () => shareText(`${t.name} – ${st.name}`, R.done && last ? finalText(t, R) : stageText(t, st, R)));
+    let html = stageChips(t, i) + nextStageBanner(t, i, R);
+    if (R.done && last) html += championBanner(t, R);
+    html += `<div class="small muted" style="margin:0 4px 10px">${esc(SG.TYPES[st.type].label)} · ${esc(stageSummary(st))}</div>`;
+    const card = (m) => bracketCard(t, m, i);
+
+    if (st.type === 'gsl' || st.type === 'rr') {
+      html += `<div class="group-grid">${R.groups
+        .map((g) => {
+          const table =
+            st.type === 'gsl'
+              ? `<table class="mini-table gtable"><thead><tr><th class="l">#</th><th class="l">${W(t).One}</th><th>V–F</th></tr></thead><tbody>${g.rows
+                  .map((r, k) => `<tr class="${r.status}"><td class="l">${r.pos || k + 1}</td><td class="l">${esc(pname(t, r.id))}</td><td>${r.w}–${r.l}</td></tr>`)
+                  .join('')}</tbody></table>`
+              : `<table class="mini-table gtable"><thead><tr><th class="l">#</th><th class="l">${W(t).One}</th><th>S</th><th>V</th>${st.cfg.allowDraw ? '<th>O</th>' : ''}<th>F</th><th>+/−</th><th>P</th></tr></thead><tbody>${g.rows
+                  .map(
+                    (r) =>
+                      `<tr class="${r.status}"><td class="l">${r.pos}</td><td class="l">${esc(pname(t, r.id))}</td><td>${r.played}</td><td>${r.w}</td>${st.cfg.allowDraw ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td>${r.mf - r.ma > 0 ? '+' : ''}${r.mf - r.ma}</td><td><b>${r.pts}</b></td></tr>`
+                  )
+                  .join('')}</tbody></table>`;
+          return `<section class="card group-card"><h3>${esc(g.name)}</h3>${table}<div class="mlist compact">${g.matches.map((m) => matchLine(t, m, i)).join('')}</div></section>`;
+        })
+        .join('')}</div>`;
+      html += `<p class="small muted" style="text-align:center">Grönt = vidare · Rött = utslagen</p>`;
+    } else if (st.type === 'swiss') {
+      html += `<section class="card"><h3>Ställning</h3><table class="mini-table gtable"><thead><tr><th class="l">${W(t).One}</th><th>V–F</th><th>Buchholz</th><th>Status</th></tr></thead><tbody>${R.table
+        .map(
+          (r) =>
+            `<tr class="${r.status}"><td class="l">${esc(pname(t, r.id))}</td><td><b>${r.w}–${r.l}</b></td><td>${r.buchholz > 0 ? '+' : ''}${r.buchholz}</td><td>${r.status === 'advanced' ? 'Vidare' : r.status === 'out' ? 'Ute' : 'Spelar'}</td></tr>`
+        )
+        .join('')}</tbody></table></section>`;
+      for (let r = R.rounds - 1; r >= 0; r--) {
+        const ms = R.matches.filter((m) => m.round === r);
+        html += `<div class="section-title">Omgång ${r + 1}</div><div class="mlist">${ms.map((m) => matchLine(t, m, i)).join('')}</div>`;
+      }
+    } else if (st.type === 'single') {
+      const cols = [];
+      for (let r = 0; r < st.data.rounds; r++) cols.push(R.matches.filter((m) => m.section === 'ub' && m.round === r));
+      html += bracketColumns(cols, card);
+      const third = R.matches.find((m) => m.section === 'third');
+      if (third) html += `<section class="card" style="max-width:260px"><h3>Match om tredjepris</h3>${card(third)}</section>`;
+    } else if (st.type === 'double') {
+      const ub = st.data.ub.map((ids) => ids.map((id) => R.byId[id]));
+      const lb = st.data.lb.map((ids) => ids.map((id) => R.byId[id]));
+      html += `<div class="section-title">Övre träd</div>` + bracketColumns(ub, card);
+      html += `<div class="section-title">Undre träd</div>` + bracketColumns(lb, card);
+      html += `<div class="section-title">Final</div><div class="row wrap">${R.matches
+        .filter((m) => m.section === 'gf' && m.state !== 'skip')
+        .map((m) => `<div style="width:220px">${card(m)}</div>`)
+        .join('')}</div>`;
+    } else if (st.type === 'heats') {
+      R.rounds
+        .slice()
+        .reverse()
+        .forEach((rd) => {
+          html += `<div class="section-title">${esc(rd.name)}</div><div class="heat-grid">${rd.heats.map((h) => heatCard(t, h, i, st)).join('')}</div>`;
+        });
+      html += `<p class="small muted" style="text-align:center">Grönt = vidare till nästa runda</p>`;
+    }
+    if (R.done && last) html += placementsCard(t, R);
+    view.innerHTML = html;
+    view.onclick = (e) => {
+      if (e.target.closest('[data-share-final]')) return shareText(`${t.name} – resultat`, finalText(t, R));
+      stageClick(e, t);
+    };
+  }
+
+  function bracketColumns(cols, card) {
+    return `<div class="bracket-wrap"><div class="bracket">${cols
+      .map(
+        (ms) => `<div class="b-col"><h4>${esc(ms[0] ? ms[0].label : '')}<small>${ms.filter((m) => m.state === 'done').length}/${ms.filter((m) => m.state !== 'bye' && m.state !== 'empty').length} klara · ${boText(ms[0] && ms[0].bo)}</small></h4>
+        <div class="b-matches">${ms.map(card).join('')}</div></div>`
+      )
+      .join('')}</div></div>`;
+  }
+
+  function bracketCard(t, m, i) {
+    const row = (side) => {
+      const id = m[side];
+      const score = side === 'a' ? m.sa : m.sb;
+      let cls = '';
+      let label;
+      if (id) {
+        label = esc(pname(t, id));
+        if (m.winner === id) cls = 'win';
+        else if (m.winner) cls = 'lose';
+      } else {
+        cls = 'tbd';
+        label = m.state === 'bye' || m.state === 'empty' ? 'Walk over' : 'Väntar…';
+      }
+      return `<div class="m-row ${cls}"><span class="pn">${label}</span><span class="ps">${score != null ? fmt(score) : ''}</span></div>`;
+    };
+    return `<button class="match ${m.state === 'done' ? 'done' : ''} ${m.state === 'ready' ? 'ready' : ''} ${m.state === 'bye' || m.state === 'empty' ? 'bye' : ''}" data-action="match" data-i="${i}" data-id="${m.id}">${row('a')}${row('b')}</button>`;
+  }
+
+  function stageText(t, st, R) {
+    const lines = [`${t.name} – ${st.name}`, ''];
+    const ml = (m) => `${m.a ? pname(t, m.a) : '?'} – ${m.b ? pname(t, m.b) : m.state === 'bye' ? 'walk over' : '?'}${m.sa != null || m.sb != null ? `  ${fmt(m.sa)}–${fmt(m.sb)}` : ''}`;
+    if (R.groups) {
+      R.groups.forEach((g) => {
+        lines.push(g.name.toUpperCase());
+        g.rows.forEach((r, k) => lines.push(`  ${r.pos || k + 1}. ${pname(t, r.id)}${r.pts != null ? `  ${r.pts} p` : `  ${r.w}–${r.l}`}`));
+        lines.push('');
+      });
+    } else if (st.type === 'swiss') {
+      R.table.forEach((r) => lines.push(`${r.w}–${r.l}  ${pname(t, r.id)}${r.status === 'advanced' ? '  ✓' : r.status === 'out' ? '  ✗' : ''}`));
+    } else if (st.type === 'heats') {
+      R.rounds.forEach((rd) => {
+        lines.push(rd.name.toUpperCase());
+        rd.heats.forEach((h) => lines.push(`  ${h.isFinal ? 'Final' : 'Heat ' + (h.index + 1)}: ${h.rows.map((r) => `${pname(t, r.id)} ${fmt(r.total)}p`).join(', ')}`));
+      });
+    } else {
+      R.matches.filter((m) => m.state === 'done' || m.state === 'ready').forEach((m) => lines.push(`${m.label}: ${ml(m)}`));
+    }
+    return lines.join('\n');
   }
 
   /* ------------------------------ Start ----------------------------- */

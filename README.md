@@ -27,6 +27,26 @@ installeras ovanpå den gamla – dina turneringar finns kvar.
 > All data sparas lokalt i telefonen. Använd **Mer → Exportera säkerhetskopia**
 > då och då, särskilt innan du avinstallerar appen.
 
+## Format
+
+Välj format när du skapar en turnering (eller under **Format / Mer → Byt format**):
+
+| Mall | Upplägg |
+|---|---|
+| **Poängliga** | Poäng per omgång, automatisk tabell, slutspel för topp X |
+| **Valorant Champions** | 16 lag i 4 GSL-grupper (Bo3, dubbelutslagning i gruppen), topp 2 till dubbelutslaget slutspel (Bo3, undre final och final Bo5) – som Champions Shanghai |
+| **CS Major** | Swiss-fas (Bo1, avgörande matcher Bo3), 3 vinster vidare / 3 förluster ute, topp 8 till utslagning |
+| **Mario Kart** | Heat om 4 där topp 2 går vidare, runda efter runda till en final. Poäng per placering och flera race per heat |
+| **Gruppspel + slutspel** | Alla möter alla i grupper, de bästa till utslagning |
+| **Utslagning / Dubbelutslagning** | Direkt till slutspelsträd |
+| **Anpassat** | Bygg eget format fas för fas |
+
+Allt går att anpassa per fas: antal grupper, hur många som går vidare, Bo1/Bo2/Bo3/Bo5/Bo7 per
+runda (t.ex. separat för semifinal, final, undre final), poäng för vinst/oavgjort/förlust,
+dubbelmöten, match om tredjepris, omstartad final, heatstorlek, antal race och poängtabell.
+Seedningen kan flyttas om eller slumpas innan varje fas startar. Lag kan ha en spelarlista
+med valfri lagstorlek (t.ex. 5 för CS2/Valorant).
+
 ## Funktioner
 
 **Spelare**
@@ -82,6 +102,7 @@ installeras ovanpå den gamla – dina turneringar finns kvar.
 ```
 web/            Själva appen (HTML/CSS/JS) – fungerar även i en vanlig webbläsare
   logic.js      Tabellberäkning, seedning och slutspelsträd (ren logik)
+  stages.js     Formatmotor: GSL, gruppspel, Swiss, utslagning, dubbelutslagning, heat
   app.js        Gränssnittet
 tests/          Tester för logiken (node --test tests/*.test.js)
 tools/          Bygger den fristående Turnering.html
