@@ -697,3 +697,11 @@ details.cfg[open] > summary::after { content: '▴'; }
 .sb-table td.l input { width: 130px; text-align: left; }
 .sb-table .icon-btn { width: 34px; height: 34px; }
 .sb-table .icon-btn svg { width: 16px; height: 16px; }
+.sb-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; cursor: pointer;
+  padding: 26px 16px; margin-bottom: 12px; border: 2px dashed var(--primary); border-radius: 18px;
+  background: var(--primary-soft); color: var(--text);
+}
+.sb-drop svg { width: 34px; height: 34px; color: var(--primary); }
+.sb-drop span { font-size: .85rem; color: var(--muted); }
+#sbBody.dragging .sb-drop, #sbBody.dragging { outline: 3px solid var(--primary); outline-offset: 4px; border-radius: 18px; }

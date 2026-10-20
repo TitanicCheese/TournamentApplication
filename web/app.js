@@ -3292,19 +3292,36 @@
     return null;
   }
 
-  // Skalar ner bilden (max 1568 px) och gör om den till JPEG i base64
+  // Bilden som base64. Skärmklipp (PNG) skickas oförändrade så att liten text
+  // förblir skarp; stora bilder skalas ner till max 1568 px.
+  const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024;
   function imageToBase64(file) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
         const scale = Math.min(1, 1568 / Math.max(img.width, img.height));
+        const keep = ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) && scale === 1 && file.size <= MAX_IMAGE_BYTES;
+        if (keep) {
+          URL.revokeObjectURL(url);
+          const fr = new FileReader();
+          fr.onload = () => resolve({ data: String(fr.result).split(',')[1], mediaType: file.type });
+          fr.onerror = () => reject({ code: 'image_rejected' });
+          fr.readAsDataURL(file);
+          return;
+        }
         const c = document.createElement('canvas');
         c.width = Math.round(img.width * scale);
         c.height = Math.round(img.height * scale);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        resolve(c.toDataURL('image/jpeg', 0.9).split(',')[1]);
+        let out = file.type === 'image/png' ? c.toDataURL('image/png') : '';
+        let mediaType = 'image/png';
+        if (!out || out.length * 0.75 > MAX_IMAGE_BYTES) {
+          out = c.toDataURL('image/jpeg', 0.92);
+          mediaType = 'image/jpeg';
+        }
+        resolve({ data: out.split(',')[1], mediaType: mediaType });
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -3333,7 +3350,7 @@
     } else {
       const Anthropic = window.AnthropicSDK.default || window.AnthropicSDK;
       const client = new Anthropic({ apiKey: getApiKey(), dangerouslyAllowBrowser: true });
-      const data = await imageToBase64(file);
+      const image = await imageToBase64(file);
       const model = getModel();
       const params = {
         model: model,
@@ -3343,7 +3360,7 @@
           {
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } },
+              { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
               { type: 'text', text: ST.scoreboardPrompt(game, teams, false) },
             ],
           },
@@ -3431,7 +3448,7 @@
           <div class="grow"><h3 style="margin:0">${esc(game.name)}-statistik</h3><div class="small muted">${maps.length} ${maps.length === 1 ? 'karta' : 'kartor'} · ${board.length} spelare</div></div>
         </div>
         <div class="row wrap" style="margin-top:12px">
-          <button class="btn primary" data-action="upload">${icon('upload')}Ladda upp scoreboard</button>
+          <button class="btn primary" data-action="upload">${icon('upload')}Ladda upp / klistra in scoreboard</button>
           <button class="btn" data-action="manual">${icon('edit')}Fyll i själv</button>
         </div>
         <p class="small muted" id="aiStatus" style="margin:10px 0 0"></p>
@@ -3473,11 +3490,12 @@
     readerKind().then((r) => {
       const el = $('#aiStatus');
       if (!el) return;
-      el.textContent = r
+      const tip = window.matchMedia && window.matchMedia('(pointer: coarse)').matches ? '' : ' Tips: Win+Shift+S och sedan Ctrl+V här.';
+      el.textContent = (r
         ? r.kind === 'sample'
           ? 'Bilder läses av med ditt Claude-konto. Du granskar siffrorna innan de sparas.'
           : 'Bilder läses av med Claude via din API-nyckel. Du granskar siffrorna innan de sparas.'
-        : 'Automatisk avläsning är av: lägg till en Claude API-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.';
+        : 'Automatisk avläsning är av: lägg till en Claude API-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.') + tip;
     });
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
@@ -3536,6 +3554,13 @@
     let imageUrl = null;
     let ctl = null;
     let status = '';
+    let useImage = () => {};
+    const onPaste = (e) => {
+      const f = pastedImage(e);
+      if (!f) return;
+      e.preventDefault();
+      useImage(f);
+    };
 
     function fillRosterRows() {
       draft.teams.forEach((tm, ti) => {
@@ -3557,9 +3582,10 @@
       const statHead = game.stats.map((s) => `<th title="${esc(s.long)}">${esc(s.label)}</th>`).join('');
       return `
         <input type="file" id="sbFile" accept="image/*" hidden>
+        ${imageUrl ? '' : `<div class="sb-drop" data-sb="pick">${icon('upload')}<b>Klistra in skärmklippet (Ctrl+V)</b><span>…eller dra hit en bild, eller tryck för att välja fil</span></div>`}
         <div class="sb-image">
           ${imageUrl ? `<img src="${imageUrl}" alt="Scoreboard">` : ''}
-          <button class="btn small" data-sb="pick">${icon('upload')}${imageUrl ? 'Byt bild' : 'Välj skärmbild'}</button>
+          ${imageUrl ? `<button class="btn small" data-sb="pick">${icon('upload')}Byt bild</button>` : ''}
           ${imageUrl ? `<button class="btn small primary" data-sb="read">${icon('shuffle')}Läs av igen</button>` : ''}
         </div>
         ${status ? `<div class="sb-status">${status}</div>` : ''}
@@ -3629,6 +3655,7 @@
       onClose: () => {
         if (ctl) ctl.abort();
         if (imageUrl) URL.revokeObjectURL(imageUrl);
+        document.removeEventListener('paste', onPaste);
       },
       onOpen: (w) => {
         const box = $('#sbBody', w);
@@ -3659,14 +3686,27 @@
           redraw();
         }
 
+        useImage = (f) => {
+          if (!f || !/^image\//.test(f.type)) return toast('Det där är ingen bild');
+          file = f;
+          if (imageUrl) URL.revokeObjectURL(imageUrl);
+          imageUrl = URL.createObjectURL(file);
+          read();
+        };
+        box.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          box.classList.add('dragging');
+        });
+        box.addEventListener('dragleave', () => box.classList.remove('dragging'));
+        box.addEventListener('drop', (e) => {
+          e.preventDefault();
+          box.classList.remove('dragging');
+          useImage(e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
         box.addEventListener('change', (e) => {
           const el = e.target;
           if (el.id === 'sbFile') {
-            file = el.files && el.files[0];
-            if (!file) return;
-            if (imageUrl) URL.revokeObjectURL(imageUrl);
-            imageUrl = URL.createObjectURL(file);
-            read();
+            useImage(el.files && el.files[0]);
           } else if (el.dataset.sbTeam != null) {
             const ti = Number(el.dataset.sbTeam);
             draft.teams[ti].teamId = el.value || null;
@@ -3716,10 +3756,28 @@
             });
           }
         });
-        if (opts.pick) setTimeout(() => $('#sbFile', w).click(), 50);
+        document.addEventListener('paste', onPaste);
+        if (opts.file) useImage(opts.file);
+        // På mobil öppnas bildväljaren direkt; på datorn väntar dialogen på Ctrl+V
+        else if (opts.pick && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) setTimeout(() => $('#sbFile', w).click(), 50);
       },
     });
   }
+
+  function pastedImage(e) {
+    const items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+    const item = items.find((i) => i.kind === 'file' && /^image\//.test(i.type));
+    return item ? item.getAsFile() : null;
+  }
+
+  // Ctrl+V på Stats-fliken öppnar avläsningen direkt med bilden
+  document.addEventListener('paste', (e) => {
+    if (ui.tab !== 'stats' || modalStack.length || !gameOf(T())) return;
+    const f = pastedImage(e);
+    if (!f) return;
+    e.preventDefault();
+    statsEntryDialog(T(), { file: f });
+  });
 
   function statsSettingsHtml(t) {
     const g = t.settings.game || 'none';
