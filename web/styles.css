@@ -705,3 +705,31 @@ details.cfg[open] > summary::after { content: '▴'; }
 .sb-drop svg { width: 34px; height: 34px; color: var(--primary); }
 .sb-drop span { font-size: .85rem; color: var(--muted); }
 #sbBody.dragging .sb-drop, #sbBody.dragging { outline: 3px solid var(--primary); outline-offset: 4px; border-radius: 18px; }
+
+/* ------------------------------------------------- Guide: ny turnering */
+body.wizard .tabbar { display: none; }
+body.wizard { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
+.wizard-head { text-align: center; margin: 8px 6px 18px; }
+.wizard-head h2 { margin: 6px 0 6px; font-size: 1.55rem; letter-spacing: -.02em; text-wrap: balance; }
+.wizard-head p { margin: 0; }
+.wizard-step {
+  display: inline-block; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  padding: 4px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary);
+}
+.wizard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.wizard-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 16px;
+  background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 22px; color: var(--text);
+  box-shadow: var(--glass-shine), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  transition: transform .15s, box-shadow .15s;
+}
+.wizard-card:hover, .wizard-card:focus-visible { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--primary), var(--glass-shadow); outline: none; }
+.wizard-card:active { transform: scale(.98); }
+.wizard-card b { font-size: 1.08rem; }
+.wizard-desc { font-size: .86rem; color: var(--muted); line-height: 1.4; }
+.wizard-icon {
+  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 4px;
+  background: var(--primary-grad); color: #fff; box-shadow: 0 4px 14px rgba(124, 77, 255, .35), inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.wizard-icon svg { width: 24px; height: 24px; }

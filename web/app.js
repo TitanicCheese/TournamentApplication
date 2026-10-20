@@ -88,7 +88,7 @@
 
   function freshDb() {
     const t = newTournament('Min turnering');
-    return { version: 1, activeId: t.id, tournaments: { [t.id]: t }, settings: { theme: 'auto' } };
+    return normalizeDb({ version: 1, activeId: t.id, tournaments: { [t.id]: t }, settings: { theme: 'auto' } });
   }
 
   function normalizeDb(d) {
@@ -123,7 +123,7 @@
     }
   }
 
-  const ui = { statSort: null, statTeam: null, statMin: 1, stageIdx: null, tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
+  const ui = { wizard: null, statSort: null, statTeam: null, statMin: 1, stageIdx: null, tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
     if (saved.tab) ui.tab = saved.tab;
@@ -439,10 +439,15 @@
     $('#tabbar').classList.toggle('six', statsOn);
     if (!statsOn && ui.tab === 'stats') ui.tab = 'table';
     document.body.classList.toggle('big', ui.big);
+    document.body.classList.toggle('wizard', !!ui.wizard);
     const view = $('#view');
-    view.className = 'view view-' + ui.tab;
+    view.className = 'view view-' + (ui.wizard ? 'wizard' : ui.tab);
     view.onclick = view.oninput = view.onchange = view.onkeydown = view.onsubmit = null;
     $('#topActions').innerHTML = '';
+    if (ui.wizard) {
+      $('#tName').textContent = 'Ny turnering';
+      return renderWizard(view);
+    }
     const renderers = staged
       ? { players: renderPlayers, points: renderStageMatches, table: renderStageBracket, playoff: renderStageFormat, stats: renderStats, more: renderMore }
       : { players: renderPlayers, points: renderPoints, table: renderTable, playoff: renderPlayoff, stats: renderStats, more: renderMore };
@@ -1832,73 +1837,7 @@
   }
 
   function newTournamentDialog() {
-    let mode = 'individual';
-    let preset = SG.PRESETS[0];
-    openModal({
-      title: 'Ny turnering',
-      body: `
-        <label class="field"><span>Namn</span><input type="text" id="ntName" maxlength="60" autofocus></label>
-        <div class="field"><span>Format</span>
-          <div class="preset-list compact">${SG.PRESETS.map((p, k) => `<button type="button" class="preset ${k === 0 ? 'on' : ''}" data-np="${p.id}"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`).join('')}</div>
-        </div>
-        <div class="field"><span>Deltagare</span>
-          <div class="seg" style="margin:0">
-            <button type="button" data-mode="individual" class="on">Spelare</button>
-            <button type="button" data-mode="team">Lag</button>
-          </div>
-        </div>
-        <label class="field" id="ntRosterWrap" hidden><span>Spelare per lag (0 = valfritt)</span><input type="number" id="ntRoster" min="0" value="5"></label>
-        <label class="field"><span>Spel (för spelarstatistik)</span><select id="ntGame"><option value="none">Ingen statistik</option>${Object.entries(ST.GAMES).map(([id, g]) => `<option value="${id}">${esc(g.long)}</option>`).join('')}</select></label>
-        <p class="small muted" id="ntHelp"></p>`,
-      actions: [
-        { label: 'Avbryt' },
-        {
-          label: 'Skapa',
-          cls: 'primary',
-          onClick: (w) => {
-            const v = $('#ntName', w).value.trim();
-            if (!v) {
-              toast('Skriv ett namn');
-              return false;
-            }
-            const nt = newTournament(v, mode);
-            normalize(nt);
-            applyPreset(nt, preset);
-            nt.mode = mode;
-            nt.settings.rosterSize = mode === 'team' ? Math.max(0, Math.round(Number($('#ntRoster', w).value) || 0)) : 0;
-            nt.settings.game = $('#ntGame', w).value;
-            db.tournaments[nt.id] = nt;
-            db.activeId = nt.id;
-            ui.roundId = null;
-            ui.stageIdx = null;
-            poDraft = null;
-            if (isStages(nt)) ui.tab = 'players';
-            saveUi();
-            commit(`${v} skapad – lägg till ${W(nt).one}`);
-          },
-        },
-      ],
-      onOpen: (w) => {
-        const setMode = (m) => {
-          mode = m;
-          $$('[data-mode]', w).forEach((x) => x.classList.toggle('on', x.dataset.mode === m));
-          $('#ntRosterWrap', w).hidden = m !== 'team';
-          $('#ntHelp', w).textContent =
-            m === 'team' ? 'Lagen är deltagarna. Varje lag kan ha en spelarlista (t.ex. 5 spelare i CS2/Valorant).' : 'Varje spelare tävlar för sig själv.';
-        };
-        setMode('individual');
-        $$('[data-mode]', w).forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-        $$('[data-np]', w).forEach((b) =>
-          b.addEventListener('click', () => {
-            preset = SG.PRESETS.find((p) => p.id === b.dataset.np);
-            $$('[data-np]', w).forEach((x) => x.classList.toggle('on', x === b));
-            if (preset.mode) setMode(preset.mode);
-            if (preset.rosterSize) $('#ntRoster', w).value = preset.rosterSize;
-            $('#ntGame', w).value = preset.game || 'none';
-          })
-        );
-      },
-    });
+    startWizard();
   }
 
   function dateStamp() {
@@ -3808,17 +3747,181 @@
       </section>` : ''}`;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Ny turnering: först typ, sedan detaljer                            */
+  /* ------------------------------------------------------------------ */
+
+  const PRESET_ICONS = {
+    league: 'chart',
+    champions: 'trophy',
+    major: 'shuffle',
+    mariokart: 'dice',
+    'groups-playoff': 'people',
+    single: 'trophy',
+    double: 'trophy',
+    custom: 'edit',
+  };
+
+  // En orörd standardturnering ("Min turnering" utan innehåll) räknas inte som en riktig turnering
+  function isPristine(t) {
+    return (
+      t.name === 'Min turnering' &&
+      !(t.players || []).length &&
+      !(t.rounds || []).length &&
+      !(t.stages || []).length &&
+      !t.playoff &&
+      !(t.statMaps && t.statMaps.length)
+    );
+  }
+
+  function startWizard() {
+    const real = Object.values(db.tournaments).filter((t) => !isPristine(t));
+    ui.wizard = { step: 1, preset: null, mode: 'individual', roster: 5, game: 'none', name: '', cancelable: real.length > 0 };
+    window.scrollTo(0, 0);
+    render();
+  }
+
+  function cancelWizard() {
+    ui.wizard = null;
+    render();
+  }
+
+  function presetTags(p) {
+    const tags = [p.mode === 'team' ? `Lag${p.rosterSize ? ' om ' + p.rosterSize : ''}` : 'Spelare'];
+    (p.stages || []).forEach((s) => tags.push(SG.TYPES[s.type].short));
+    if (p.format === 'league') tags.push('Omgångar', 'Tabell', 'Slutspel');
+    return tags.map((x) => `<i>${esc(x)}</i>`).join('');
+  }
+
+  function renderWizard(view) {
+    const wz = ui.wizard;
+    if (wz.step === 1) {
+      view.innerHTML = `
+        <section class="wizard-head">
+          <div class="wizard-step">Steg 1 av 2</div>
+          <h2>Vilken typ av turnering vill du skapa?</h2>
+          <p class="muted">Du kan ändra format och inställningar senare.</p>
+        </section>
+        <div class="wizard-grid">
+          ${SG.PRESETS.map(
+            (p) => `<button class="wizard-card" data-wz="preset" data-id="${p.id}">
+              <span class="wizard-icon">${icon(PRESET_ICONS[p.id] || 'trophy')}</span>
+              <b>${esc(p.name)}</b>
+              <span class="wizard-desc">${esc(p.desc)}</span>
+              <span class="preset-tags">${presetTags(p)}</span>
+            </button>`
+          ).join('')}
+        </div>
+        ${wz.cancelable ? `<button class="btn ghost block" data-wz="cancel" style="margin-top:14px">Avbryt</button>` : ''}`;
+    } else {
+      const p = wz.preset;
+      const suggestion = p.id === 'league' ? 'Höstligan' : p.name + ' ' + new Date().getFullYear();
+      view.innerHTML = `
+        <section class="wizard-head">
+          <div class="wizard-step">Steg 2 av 2</div>
+          <h2>${esc(p.name)}</h2>
+          <p class="muted">${esc(p.desc)}</p>
+        </section>
+        <section class="card">
+          <label class="field"><span>Namn på turneringen</span><input type="text" id="wzName" maxlength="60" value="${esc(wz.name)}" placeholder="${esc(suggestion)}"></label>
+          <div class="field"><span>Deltagare</span>
+            <div class="seg" style="margin:0">
+              <button type="button" data-wz="mode" data-v="individual" class="${wz.mode === 'individual' ? 'on' : ''}">Spelare</button>
+              <button type="button" data-wz="mode" data-v="team" class="${wz.mode === 'team' ? 'on' : ''}">Lag</button>
+            </div>
+          </div>
+          ${wz.mode === 'team' ? `<label class="field"><span>Spelare per lag (0 = valfritt)</span><input type="number" id="wzRoster" min="0" value="${wz.roster}"></label>` : ''}
+          <label class="field" style="margin-bottom:0"><span>Spel (för spelarstatistik)</span>
+            <select id="wzGame"><option value="none">Ingen statistik</option>${Object.entries(ST.GAMES).map(([id, g]) => `<option value="${id}" ${wz.game === id ? 'selected' : ''}>${esc(g.long)}</option>`).join('')}</select>
+          </label>
+        </section>
+        <button class="btn primary block" data-wz="create">${icon('trophy')}Skapa turnering</button>
+        <button class="btn ghost block" data-wz="back" style="margin-top:8px">← Välj en annan typ</button>`;
+      setTimeout(() => {
+        const n = $('#wzName');
+        if (n && !wz.name) n.focus();
+      }, 50);
+    }
+    view.onclick = (e) => {
+      const a = e.target.closest('[data-wz]');
+      if (!a) return;
+      const act = a.dataset.wz;
+      if (act === 'cancel') cancelWizard();
+      else if (act === 'preset') {
+        const p = SG.PRESETS.find((x) => x.id === a.dataset.id);
+        Object.assign(wz, { step: 2, preset: p, mode: p.mode || 'individual', roster: p.rosterSize || 5, game: p.game || 'none' });
+        window.scrollTo(0, 0);
+        render();
+      } else if (act === 'back') {
+        wz.step = 1;
+        render();
+      } else if (act === 'mode') {
+        wz.mode = a.dataset.v;
+        render();
+      } else if (act === 'create') createFromWizard();
+    };
+    view.oninput = (e) => {
+      if (e.target.id === 'wzName') wz.name = e.target.value;
+      else if (e.target.id === 'wzRoster') wz.roster = Math.max(0, Math.round(Number(e.target.value) || 0));
+    };
+    view.onchange = (e) => {
+      if (e.target.id === 'wzGame') wz.game = e.target.value;
+    };
+    view.onkeydown = (e) => {
+      if (e.key === 'Enter' && e.target.id === 'wzName') createFromWizard();
+    };
+  }
+
+  function createFromWizard() {
+    const wz = ui.wizard;
+    const input = $('#wzName');
+    const name = wz.name.trim() || (input && input.placeholder) || wz.preset.name;
+    const nt = newTournament(name, wz.mode);
+    normalize(nt);
+    applyPreset(nt, wz.preset);
+    nt.mode = wz.mode;
+    nt.settings.rosterSize = wz.mode === 'team' ? wz.roster : 0;
+    nt.settings.game = wz.game;
+    // Ta bort den orörda standardturneringen så att den inte ligger kvar som skräp
+    Object.values(db.tournaments).forEach((t) => {
+      if (isPristine(t)) delete db.tournaments[t.id];
+    });
+    db.tournaments[nt.id] = nt;
+    db.activeId = nt.id;
+    ui.wizard = null;
+    ui.roundId = null;
+    ui.stageIdx = null;
+    poDraft = null;
+    ui.tab = 'players';
+    saveUi();
+    commit(`${name} skapad – lägg till ${W(nt).one}`);
+  }
+
   /* ------------------------------ Start ----------------------------- */
 
   $('#tabbar').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
     if (b) setTab(b.dataset.tab);
   });
-  $('#tournamentBtn').addEventListener('click', () => setTab('more'));
+  $('#tournamentBtn').addEventListener('click', () => {
+    if (!ui.wizard) setTab('more');
+  });
   $('#timerChip').addEventListener('click', timerDialog);
 
   // Bakåtknappen på Android: stäng dialog → gå till tabellen → avsluta
   window.appBack = function () {
+    if (ui.wizard && !modalStack.length) {
+      if (ui.wizard.step === 2) {
+        ui.wizard.step = 1;
+        render();
+        return true;
+      }
+      if (ui.wizard.cancelable) {
+        cancelWizard();
+        return true;
+      }
+      return false;
+    }
     if (modalStack.length) {
       modalStack[modalStack.length - 1]();
       return true;
@@ -3845,6 +3948,9 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
+  if (Object.values(db.tournaments).every(isPristine)) {
+    ui.wizard = { step: 1, preset: null, mode: 'individual', roster: 5, game: 'none', name: '', cancelable: false };
+  }
   render();
   timerTick();
 })();
