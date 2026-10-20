@@ -47,6 +47,26 @@ dubbelmöten, match om tredjepris, omstartad final, heatstorlek, antal race och 
 Seedningen kan flyttas om eller slumpas innan varje fas startar. Lag kan ha en spelarlista
 med valfri lagstorlek (t.ex. 5 för CS2/Valorant).
 
+## Spelarstatistik (CS2, Valorant, LoL, Rocket League eller eget spel)
+
+Välj spel när turneringen skapas eller under **Mer → Spel & statistik**. Då dyker fliken
+**Stats** upp:
+
+1. Ladda upp en skärmbild av scoreboarden efter en karta (från Stats-fliken eller direkt i en match).
+2. Claude läser av varje spelares siffror (t.ex. K, D, A, ADR, HS%, MVP) och kopplar
+   spelarnamnen till lagens spelarlistor, även med klantaggar.
+3. Du granskar och rättar siffrorna bredvid bilden och sparar.
+
+Topplistan räknar ihop alla kartor: totalsummor (kills, MVP), snitt (ADR, HS%, ACS) och
+K/D, KDA och +/−. Sortera på valfri kolumn, filtrera på lag och sätt ett minsta antal kartor.
+
+Avläsningen använder Claude:
+- **Webbversionen på claude.ai:** via ditt Claude-konto, utan nyckel.
+- **Android-appen / HTML-filen:** lägg in en egen Claude API-nyckel under Mer. Nyckeln
+  sparas bara på enheten och följer inte med i säkerhetskopior.
+
+Utan AI går det att fylla i siffrorna själv – spelarlistan fylls i automatiskt.
+
 ## Funktioner
 
 **Spelare**
@@ -103,6 +123,8 @@ med valfri lagstorlek (t.ex. 5 för CS2/Valorant).
 web/            Själva appen (HTML/CSS/JS) – fungerar även i en vanlig webbläsare
   logic.js      Tabellberäkning, seedning och slutspelsträd (ren logik)
   stages.js     Formatmotor: GSL, gruppspel, Swiss, utslagning, dubbelutslagning, heat
+  stats.js      Spelarstatistik: speldefinitioner, topplistor, avläsning av scoreboards
+  vendor/       Anthropics officiella JS-SDK (@anthropic-ai/sdk 0.131.0), paketerad för webbläsaren
   app.js        Gränssnittet
 tests/          Tester för logiken (node --test tests/*.test.js)
 tools/          Bygger den fristående Turnering.html

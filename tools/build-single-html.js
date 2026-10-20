@@ -21,6 +21,8 @@ const replaceOnce = (needle, replacement) => {
 replaceOnce('<link rel="stylesheet" href="styles.css">', `<style>\n${read('styles.css')}\n</style>`);
 replaceOnce('<script src="logic.js"></script>', `<script>\n${safeJs(read('logic.js'))}\n</script>`);
 replaceOnce('<script src="stages.js"></script>', `<script>\n${safeJs(read('stages.js'))}\n</script>`);
+replaceOnce('<script src="stats.js"></script>', `<script>\n${safeJs(read('stats.js'))}\n</script>`);
+replaceOnce('<script src="vendor/anthropic-sdk.js"></script>', `<script>\n${safeJs(read('vendor/anthropic-sdk.js'))}\n</script>`);
 replaceOnce('<script src="app.js"></script>', `<script>\n${safeJs(read('app.js'))}\n</script>`);
 replaceOnce('<link rel="icon" href="icons/icon.svg" type="image/svg+xml">', `<link rel="icon" href="${iconUri}" type="image/svg+xml">`);
 replaceOnce('<link rel="manifest" href="manifest.webmanifest">\n', '');

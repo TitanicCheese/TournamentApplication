@@ -678,6 +678,7 @@
       desc: '16 lag: 4 GSL-grupper (Bo3), topp 2 till dubbelutslagning. Undre final och final Bo5.',
       mode: 'team',
       rosterSize: 5,
+      game: 'valorant',
       stages: [
         { type: 'gsl', name: 'Gruppspel', cfg: { groups: 4, advancePerGroup: 2, bo: 3, deciderBo: 3 } },
         { type: 'double', name: 'Slutspel', cfg: { bo: 3, ubFinalBo: 3, lbFinalBo: 5, gfBo: 5, gfReset: false } },
@@ -689,6 +690,7 @@
       desc: '16 lag: Swiss (Bo1, avgörande Bo3), 3 vinster vidare. Topp 8 till utslagning Bo3.',
       mode: 'team',
       rosterSize: 5,
+      game: 'cs2',
       stages: [
         { type: 'swiss', name: 'Swiss-fas', cfg: { winsToAdvance: 3, lossesToElim: 3, bo: 1, decisiveBo: 3 } },
         { type: 'single', name: 'Slutspel', cfg: { bo: 3, semiBo: 3, finalBo: 3, third: false } },

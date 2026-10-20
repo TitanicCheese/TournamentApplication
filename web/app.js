@@ -37,7 +37,7 @@
   /* Data                                                                */
   /* ------------------------------------------------------------------ */
 
-  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32, teamScoring: 'sum', teamTopN: 3, rosterSize: 0 };
+  const DEFAULT_SETTINGS = { bestOf: 0, quickValues: '', cutoff: 32, teamScoring: 'sum', teamTopN: 3, rosterSize: 0, game: 'none', customStats: '', customGameName: '' };
   const TEAM_COLORS = ['#6c4dff', '#ff4d8d', '#12b886', '#ff9f1c', '#2ec5ff', '#f03e3e', '#3b82f6', '#be4bdb', '#40c057', '#fab005', '#15aabf', '#495057'];
   // Färgord i lagnamnet styr färgen, t.ex. "Lag Röd" blir rött
   const NAMED_COLORS = [
@@ -74,6 +74,7 @@
     if (t.mode !== 'team') t.mode = 'individual';
     if (t.format !== 'stages') t.format = 'league';
     t.stages = Array.isArray(t.stages) ? t.stages : [];
+    t.statMaps = Array.isArray(t.statMaps) ? t.statMaps : [];
     if (!t.presetId) t.presetId = t.format === 'league' ? 'league' : 'custom';
     t.teams = Array.isArray(t.teams) ? t.teams : [];
     // Äldre versioner hade ett fritt "klubb"-fält – gör om det till lag
@@ -122,7 +123,7 @@
     }
   }
 
-  const ui = { stageIdx: null, tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
+  const ui = { statSort: null, statTeam: null, statMin: 1, stageIdx: null, tab: 'table', roundId: null, playerSearch: '', pointsSearch: '', pointsSort: 'name', big: false, playersView: 'players', tableView: 'players' };
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
     if (saved.tab) ui.tab = saved.tab;
@@ -433,14 +434,18 @@
     $('#tabbar [data-tab="points"] span').textContent = staged ? 'Matcher' : 'Poäng';
     $('#tabbar [data-tab="table"] span').textContent = staged ? 'Bracket' : 'Tabell';
     $('#tabbar [data-tab="playoff"] span').textContent = staged ? 'Format' : 'Slutspel';
+    const statsOn = !!gameOf(t);
+    $('#tabbar [data-tab="stats"]').hidden = !statsOn;
+    $('#tabbar').classList.toggle('six', statsOn);
+    if (!statsOn && ui.tab === 'stats') ui.tab = 'table';
     document.body.classList.toggle('big', ui.big);
     const view = $('#view');
     view.className = 'view view-' + ui.tab;
     view.onclick = view.oninput = view.onchange = view.onkeydown = view.onsubmit = null;
     $('#topActions').innerHTML = '';
     const renderers = staged
-      ? { players: renderPlayers, points: renderStageMatches, table: renderStageBracket, playoff: renderStageFormat, more: renderMore }
-      : { players: renderPlayers, points: renderPoints, table: renderTable, playoff: renderPlayoff, more: renderMore };
+      ? { players: renderPlayers, points: renderStageMatches, table: renderStageBracket, playoff: renderStageFormat, stats: renderStats, more: renderMore }
+      : { players: renderPlayers, points: renderPoints, table: renderTable, playoff: renderPlayoff, stats: renderStats, more: renderMore };
     (renderers[ui.tab] || renderTable)(view, t);
   }
 
@@ -1624,6 +1629,8 @@
         <div class="row" style="margin-top:12px"><div class="grow"><div class="small muted">Format</div><b>${esc(isStages(t) ? presetName(t) : 'Poängliga')}</b></div><button class="btn small" data-action="changeFormat">Byt format</button></div>
       </section>
 
+      ${statsSettingsHtml(t)}
+
       <div class="section-title">Verktyg</div>
       <ul class="list">
         <li class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
@@ -1680,6 +1687,14 @@
           break;
         case 'newT':
           newTournamentDialog();
+          break;
+        case 'clearKey':
+          try {
+            localStorage.removeItem(KEY_STORE);
+          } catch (err) {
+            /* ignorera */
+          }
+          commit('API-nyckeln är borttagen');
           break;
         case 'changeFormat':
           presetPicker((p) => {
@@ -1777,6 +1792,32 @@
         t.settings.cutoff = Math.max(0, Math.round(Number(e.target.value) || 0));
         poDraft = null;
         commit('Sparat');
+      } else if (id === 'setGame') {
+        t.settings.game = e.target.value;
+        commit(t.settings.game === 'none' ? 'Statistik avstängd' : 'Spel valt – statistik finns under Stats');
+      } else if (id === 'setCustomName') {
+        t.settings.customGameName = e.target.value.trim();
+        commit('Sparat');
+      } else if (id === 'setCustomStats') {
+        t.settings.customStats = e.target.value.trim();
+        commit('Sparat');
+      } else if (id === 'setApiKey') {
+        const v = e.target.value.trim();
+        if (v && !v.startsWith('••')) {
+          try {
+            localStorage.setItem(KEY_STORE, v);
+          } catch (err) {
+            /* ignorera */
+          }
+          commit('API-nyckeln är sparad på den här enheten');
+        }
+      } else if (id === 'setModel') {
+        try {
+          localStorage.setItem(MODEL_STORE, e.target.value.trim() || DEFAULT_MODEL);
+        } catch (err) {
+          /* ignorera */
+        }
+        commit('Modell sparad');
       } else if (id === 'setRoster') {
         t.settings.rosterSize = Math.max(0, Math.round(Number(e.target.value) || 0));
         commit('Sparat');
@@ -1807,6 +1848,7 @@
           </div>
         </div>
         <label class="field" id="ntRosterWrap" hidden><span>Spelare per lag (0 = valfritt)</span><input type="number" id="ntRoster" min="0" value="5"></label>
+        <label class="field"><span>Spel (för spelarstatistik)</span><select id="ntGame"><option value="none">Ingen statistik</option>${Object.entries(ST.GAMES).map(([id, g]) => `<option value="${id}">${esc(g.long)}</option>`).join('')}</select></label>
         <p class="small muted" id="ntHelp"></p>`,
       actions: [
         { label: 'Avbryt' },
@@ -1824,6 +1866,7 @@
             applyPreset(nt, preset);
             nt.mode = mode;
             nt.settings.rosterSize = mode === 'team' ? Math.max(0, Math.round(Number($('#ntRoster', w).value) || 0)) : 0;
+            nt.settings.game = $('#ntGame', w).value;
             db.tournaments[nt.id] = nt;
             db.activeId = nt.id;
             ui.roundId = null;
@@ -1851,6 +1894,7 @@
             $$('[data-np]', w).forEach((x) => x.classList.toggle('on', x === b));
             if (preset.mode) setMode(preset.mode);
             if (preset.rosterSize) $('#ntRoster', w).value = preset.rosterSize;
+            $('#ntGame', w).value = preset.game || 'none';
           })
         );
       },
@@ -2286,6 +2330,7 @@
     t.presetId = preset.id;
     if (!t.players.length && preset.mode) t.mode = preset.mode;
     if (preset.rosterSize) t.settings.rosterSize = preset.rosterSize;
+    if (preset.game) t.settings.game = preset.game;
   }
 
   function presetPicker(onPick, current) {
@@ -2774,7 +2819,8 @@
         <p class="small muted" style="margin-top:0">${m.bo > 1 ? `Best of ${m.bo} – först till ${need} vunna kartor/matcher.` : 'En match (Bo1). Skriv t.ex. rundor 13–9.'}</p>
         <div class="mp">${side('a')}${side('b')}</div>
         ${allowDraw ? `<button class="btn small block ${selected === 'draw' ? 'primary' : ''}" id="drawBtn" style="margin-top:10px">Oavgjort</button>` : ''}
-        <label class="field" style="margin-top:12px"><span>Kommentar (valfritt, t.ex. kartor)</span><input type="text" id="mNote" value="${esc(m.note || '')}" placeholder="Mirage 13–9, Inferno 11–13, Nuke 13–7"></label>`,
+        <label class="field" style="margin-top:12px"><span>Kommentar (valfritt, t.ex. kartor)</span><input type="text" id="mNote" value="${esc(m.note || '')}" placeholder="Mirage 13–9, Inferno 11–13, Nuke 13–7"></label>
+        ${gameOf(t) ? `<button class="btn block" id="mStats">${icon('chart')}Ladda upp scoreboard för en karta${statCount(t, i, m.id) ? ` (${statCount(t, i, m.id)} sparade)` : ''}</button>` : ''}`,
       actions: [
         {
           label: 'Rensa',
@@ -2802,7 +2848,13 @@
           },
         },
       ],
-      onOpen: (w) => {
+      onOpen: (w, close) => {
+        const sb = $('#mStats', w);
+        if (sb)
+          sb.onclick = () => {
+            close();
+            statsEntryDialog(t, { match: { stage: i, match: m.id }, pick: true });
+          };
         const sync = () => {
           $$('.mp-side', w).forEach((el) => el.classList.toggle('sel', el.dataset.id === selected));
           const d = $('#drawBtn', w);
@@ -2830,6 +2882,8 @@
       },
     });
   }
+
+  const statCount = (t, i, matchId) => t.statMaps.filter((m) => m.matchKey === i + ':' + matchId).length;
 
   function rosterLine(t, id) {
     const p = playerById(t, id);
@@ -3182,6 +3236,518 @@
       nodes.push({ id: 'third', sec: 'third', col: 0, index: 0, srcs: [], label: 'Match om tredjepris', bo: 0, a: m.a, b: m.b, sa: m.sa, sb: m.sb, winner: m.winner, state: m.winner ? 'done' : m.ready ? 'ready' : 'pending', seedA: m.seedA, seedB: m.seedB });
     }
     return nodes;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Spelarstatistik och topplistor                                     */
+  /* ------------------------------------------------------------------ */
+
+  const ST = window.TStats;
+  const KEY_STORE = 'turneringsapp.apikey';
+  const MODEL_STORE = 'turneringsapp.aimodel';
+  const DEFAULT_MODEL = 'claude-opus-5-5';
+  // Modeller där servern kan köra om en nekad förfrågan på en annan modell
+  const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5', 'claude-fable-5-1'];
+
+  const getApiKey = () => {
+    try {
+      return localStorage.getItem(KEY_STORE) || '';
+    } catch (e) {
+      return '';
+    }
+  };
+  const getModel = () => {
+    try {
+      return localStorage.getItem(MODEL_STORE) || DEFAULT_MODEL;
+    } catch (e) {
+      return DEFAULT_MODEL;
+    }
+  };
+  const gameOf = (t) => ST.gameFor(t.settings);
+
+  // Vilket sätt att läsa av bilder som finns: claude.ai-sidans Claude, egen API-nyckel eller inget
+  let readerPromise = null;
+  function aiReader() {
+    if (readerPromise) return readerPromise;
+    readerPromise = (async () => {
+      if (window.claude && typeof window.claude.use === 'function') {
+        try {
+          const sample = await window.claude.use('sample');
+          if (sample) {
+            const lim = await sample.limits().catch(() => null);
+            if (lim && lim.images) return { kind: 'sample', sample: sample };
+          }
+        } catch (e) {
+          /* inte tillgängligt här */
+        }
+      }
+      return null;
+    })();
+    return readerPromise;
+  }
+  async function readerKind() {
+    const r = await aiReader();
+    if (r) return r;
+    if (getApiKey() && window.AnthropicSDK) return { kind: 'api' };
+    return null;
+  }
+
+  // Skalar ner bilden (max 1568 px) och gör om den till JPEG i base64
+  function imageToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1568 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.9).split(',')[1]);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject({ code: 'image_rejected' });
+      };
+      img.src = url;
+    });
+  }
+
+  function participantInfo(t, ids) {
+    return ids.filter(Boolean).map((id) => {
+      const p = playerById(t, id);
+      return { id: id, name: pname(t, id), members: isTeamMode(t) ? (p && p.members) || [] : [pname(t, id)] };
+    });
+  }
+
+  /** Läser av en scoreboard med Claude och returnerar ett utkast att granska. */
+  async function readScoreboard(t, file, participants, signal) {
+    const game = gameOf(t);
+    const reader = await readerKind();
+    if (!reader) throw { code: 'no_ai' };
+    const teams = participants.map((p) => ({ name: p.name, members: p.members }));
+    let reading;
+    if (reader.kind === 'sample') {
+      reading = await reader.sample.json(ST.scoreboardPrompt(game, teams, true), { images: [file], signal: signal, cache: false });
+    } else {
+      const Anthropic = window.AnthropicSDK.default || window.AnthropicSDK;
+      const client = new Anthropic({ apiKey: getApiKey(), dangerouslyAllowBrowser: true });
+      const data = await imageToBase64(file);
+      const model = getModel();
+      const params = {
+        model: model,
+        max_tokens: 16000,
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: ST.scoreboardSchema(game) } },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } },
+              { type: 'text', text: ST.scoreboardPrompt(game, teams, false) },
+            ],
+          },
+        ],
+      };
+      if (FALLBACK_MODELS.includes(model)) {
+        params.betas = ['server-side-fallback-2026-07-01'];
+        params.fallbacks = 'default';
+      }
+      let response;
+      try {
+        response = await client.beta.messages.create(params, { signal: signal });
+      } catch (e) {
+        if (signal && signal.aborted) throw { code: 'cancelled' };
+        if (e instanceof Anthropic.AuthenticationError) throw { code: 'bad_key' };
+        if (e instanceof Anthropic.PermissionDeniedError) throw { code: 'bad_key' };
+        if (e instanceof Anthropic.RateLimitError) throw { code: 'rate_limited' };
+        if (e instanceof Anthropic.BadRequestError) throw { code: 'bad_request', message: e.message };
+        if (e instanceof Anthropic.APIConnectionError) throw { code: 'offline' };
+        throw { code: 'upstream_error', message: e && e.message };
+      }
+      if (response.stop_reason === 'refusal') throw { code: 'refused' };
+      if (response.stop_reason === 'max_tokens') throw { code: 'invalid_json' };
+      const text = response.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+      try {
+        reading = JSON.parse(text);
+      } catch (e) {
+        throw { code: 'invalid_json' };
+      }
+    }
+    return ST.normalizeReading(reading, game, participants);
+  }
+
+  const AI_ERRORS = {
+    no_ai: 'Automatisk avläsning är inte påslagen – fyll i siffrorna själv eller lägg till en API-nyckel under Mer.',
+    bad_key: 'API-nyckeln fungerar inte. Kontrollera den under Mer → Spel & statistik.',
+    rate_limited: 'För många förfrågningar just nu. Vänta en stund och försök igen.',
+    offline: 'Ingen internetanslutning – fyll i siffrorna själv.',
+    refused: 'Claude kunde inte läsa bilden. Prova en annan skärmbild eller fyll i själv.',
+    invalid_json: 'Avläsningen blev ofullständig. Försök igen eller fyll i själv.',
+    image_rejected: 'Bilden kunde inte användas. Välj en JPEG- eller PNG-skärmbild.',
+    not_granted: 'Du tillät inte att sidan använder Claude. Fyll i siffrorna själv.',
+    sampling_disabled: 'Claude är inte tillgängligt för ditt konto. Fyll i siffrorna själv.',
+    images_unavailable: 'Bildavläsning är inte tillgänglig här. Fyll i siffrorna själv.',
+    bad_request: 'Förfrågan nekades. Kontrollera modellnamnet under Mer.',
+  };
+
+  /* ----------------------------- Stats-flik -------------------------- */
+
+  function renderStats(view, t) {
+    const game = gameOf(t);
+    if (!game) {
+      view.innerHTML = emptyState('chart', 'Ingen statistik påslagen', 'Välj vilket spel turneringen spelas i under Mer → Spel & statistik.', 'Gå till Mer', 'goMore');
+      view.onclick = (e) => e.target.closest('[data-action="goMore"]') && setTab('more');
+      return;
+    }
+    const maps = t.statMaps;
+    const derived = ST.derivedFor(game);
+    const cols = derived.length ? [derived[0], ...game.stats, ...derived.slice(1)] : game.stats.slice();
+    if (!ui.statSort || (ui.statSort !== 'maps' && !cols.some((c) => c.key === ui.statSort))) ui.statSort = cols[0].key;
+    const board = ST.leaderboard(maps, game).filter((r) => !ui.statTeam || r.teamId === ui.statTeam);
+    const minMaps = Math.min(ui.statMin || 1, Math.max(1, maps.length));
+    const sorted = ST.sortBoard(board, ui.statSort, minMaps);
+    const teamIds = [...new Set(ST.leaderboard(maps, game).map((r) => r.teamId).filter(Boolean))];
+
+    // Höjdpunkter
+    const tile = (label, key, minM) => {
+      const best = ST.sortBoard(board, key, minM)[0];
+      if (!best || best.values[key] == null) return '';
+      return `<div class="stat hl"><span>${esc(label)}</span><b>${fmt(best.values[key])}</b><em>${esc(best.name)}</em></div>`;
+    };
+    const avgStat = game.stats.find((s) => s.kind === 'avg');
+    const hl = [
+      game.stats.some((s) => s.key === 'k') ? tile('Flest kills', 'k', 1) : tile(game.stats[0].long, game.stats[0].key, 1),
+      derived.length ? tile('Bäst K/D', 'kd', Math.min(2, Math.max(1, maps.length))) : '',
+      avgStat ? tile(`Högst ${avgStat.label}`, avgStat.key, 1) : '',
+    ].join('');
+
+    view.innerHTML = `
+      <section class="card">
+        <div class="row">
+          <div class="grow"><h3 style="margin:0">${esc(game.name)}-statistik</h3><div class="small muted">${maps.length} ${maps.length === 1 ? 'karta' : 'kartor'} · ${board.length} spelare</div></div>
+        </div>
+        <div class="row wrap" style="margin-top:12px">
+          <button class="btn primary" data-action="upload">${icon('upload')}Ladda upp scoreboard</button>
+          <button class="btn" data-action="manual">${icon('edit')}Fyll i själv</button>
+        </div>
+        <p class="small muted" id="aiStatus" style="margin:10px 0 0"></p>
+      </section>
+      ${maps.length ? `
+        ${hl ? `<div class="stat-grid hl-grid">${hl}</div>` : ''}
+        <div class="chips">${cols
+          .concat([{ key: 'maps', label: 'Kartor' }])
+          .map((c) => `<button class="chip ${ui.statSort === c.key ? 'on' : ''}" data-action="sort" data-k="${c.key}">${esc(c.label)}</button>`)
+          .join('')}</div>
+        <div class="row wrap" style="margin:0 2px 10px">
+          ${teamIds.length > 1 ? `<select id="statTeam" style="width:auto"><option value="">Alla lag</option>${teamIds.map((id) => `<option value="${id}" ${ui.statTeam === id ? 'selected' : ''}>${esc(pname(t, id))}</option>`).join('')}</select>` : ''}
+          <select id="statMin" style="width:auto">${[1, 2, 3, 5].map((n) => `<option value="${n}" ${minMaps === n ? 'selected' : ''}>Minst ${n} ${n === 1 ? 'karta' : 'kartor'}</option>`).join('')}</select>
+        </div>
+        <div class="table-scroll"><table class="standings lb">
+          <thead><tr><th>#</th><th class="l">Spelare</th><th class="${ui.statSort === 'maps' ? 'sorted' : ''}">Kartor</th>${cols.map((c) => `<th class="${ui.statSort === c.key ? 'sorted' : ''}" title="${esc(c.long)}">${esc(c.label)}</th>`).join('')}</tr></thead>
+          <tbody>${sorted
+            .map(
+              (r, i) => `<tr class="r${i + 1}"><td class="rank"><span>${i + 1}</span></td>
+                <td class="l"><div class="pname">${esc(r.name)}</div>${r.teamId ? `<div class="pclub">${esc(pname(t, r.teamId))}</div>` : ''}</td>
+                <td class="${ui.statSort === 'maps' ? 'sorted' : ''}">${r.maps}</td>
+                ${cols.map((c) => `<td class="${ui.statSort === c.key ? 'sorted' : ''}">${r.values[c.key] == null ? '–' : (c.key === 'diff' && r.values[c.key] > 0 ? '+' : '') + fmt(r.values[c.key])}</td>`).join('')}</tr>`
+            )
+            .join('')}</tbody>
+        </table></div>
+        ${sorted.length < board.length ? `<p class="small muted">${board.length - sorted.length} spelare har färre kartor än gränsen och visas inte.</p>` : ''}
+        <div class="section-title">Registrerade kartor</div>
+        <ul class="list">${maps
+          .slice()
+          .reverse()
+          .map((m) => {
+            const teams = (m.teams || []).map((tm) => `${esc(tm.teamId ? pname(t, tm.teamId) : tm.name || '?')}${tm.score != null ? ' ' + fmt(tm.score) : ''}`).join(' – ');
+            const top = ST.sortBoard(ST.leaderboard([m], game), game.stats[0].key)[0];
+            return `<li class="tap" data-action="editMap" data-id="${m.id}"><div class="grow"><div class="name">${esc(m.label || 'Karta')}${m.matchLabel ? ` <span class="small muted">· ${esc(m.matchLabel)}</span>` : ''}</div>
+              <div class="sub">${teams}${top ? ` · bäst: ${esc(top.name)} (${fmt(top.values[game.stats[0].key])} ${esc(game.stats[0].label)})` : ''}</div></div>${icon('edit')}</li>`;
+          })
+          .join('')}</ul>` : `<div class="empty">${icon('chart')}<h3>Inga kartor än</h3><div>Ladda upp en skärmbild av scoreboarden efter en karta. ${esc(game.hint)}</div></div>`}
+    `;
+    readerKind().then((r) => {
+      const el = $('#aiStatus');
+      if (!el) return;
+      el.textContent = r
+        ? r.kind === 'sample'
+          ? 'Bilder läses av med ditt Claude-konto. Du granskar siffrorna innan de sparas.'
+          : 'Bilder läses av med Claude via din API-nyckel. Du granskar siffrorna innan de sparas.'
+        : 'Automatisk avläsning är av: lägg till en Claude API-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.';
+    });
+    view.onclick = (e) => {
+      const a = e.target.closest('[data-action]');
+      if (!a) return;
+      if (a.dataset.action === 'upload') statsEntryDialog(t, { pick: true });
+      else if (a.dataset.action === 'manual') statsEntryDialog(t, {});
+      else if (a.dataset.action === 'sort') {
+        ui.statSort = a.dataset.k;
+        render();
+      } else if (a.dataset.action === 'editMap') statsEntryDialog(t, { mapId: a.dataset.id });
+    };
+    view.onchange = (e) => {
+      if (e.target.id === 'statTeam') ui.statTeam = e.target.value || null;
+      else if (e.target.id === 'statMin') ui.statMin = Number(e.target.value);
+      else return;
+      render();
+    };
+  }
+
+  // Matcher där båda lagen är kända – för att koppla en karta till en match
+  function linkableMatches(t) {
+    const out = [];
+    if (!isStages(t)) return out;
+    t.stages.forEach((st, i) => {
+      if (!st.data || st.type === 'heats') return;
+      SG.resolve(st).matches.forEach((m) => {
+        if (m.a && m.b && (m.state === 'ready' || m.state === 'done')) {
+          out.push({ key: i + ':' + m.id, stage: i, match: m.id, a: m.a, b: m.b, label: `${st.name} · ${m.label}: ${pname(t, m.a)} – ${pname(t, m.b)}` });
+        }
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Lägg till eller ändra en karta. opts: {mapId} för att ändra, {match: {stage, match}}
+   * för att koppla till en match, {pick: true} för att öppna bildväljaren direkt.
+   */
+  function statsEntryDialog(t, opts) {
+    const game = gameOf(t);
+    if (!game) return toast('Välj spel under Mer först');
+    const existing = opts.mapId ? t.statMaps.find((m) => m.id === opts.mapId) : null;
+    const matches = linkableMatches(t);
+    const allIds = t.players.filter((p) => p.active !== false).map((p) => p.id);
+    let draft;
+    if (existing) {
+      draft = JSON.parse(JSON.stringify(existing));
+      draft.rows.forEach((r) => (r.team = Math.max(0, draft.teams.findIndex((tm) => tm.teamId === r.teamId))));
+    } else {
+      const link = opts.match ? matches.find((m) => m.stage === opts.match.stage && m.match === opts.match.match) : null;
+      draft = { id: null, label: '', matchKey: link ? link.key : '', teams: [], rows: [] };
+      const ids = link ? [link.a, link.b] : [];
+      for (let k = 0; k < 2; k++) draft.teams.push({ teamId: ids[k] || null, name: '', score: null });
+      fillRosterRows();
+    }
+    let imageUrl = null;
+    let ctl = null;
+    let status = '';
+
+    function fillRosterRows() {
+      draft.teams.forEach((tm, ti) => {
+        if (draft.rows.some((r) => r.team === ti) || !tm.teamId) return;
+        const members = isTeamMode(t) ? ((playerById(t, tm.teamId) || {}).members || []) : [pname(t, tm.teamId)];
+        members.forEach((name) => draft.rows.push({ name: name, team: ti, stats: {} }));
+      });
+    }
+    const rosterNames = () => {
+      const s = new Set();
+      draft.teams.forEach((tm) => {
+        if (!tm.teamId) return;
+        (isTeamMode(t) ? ((playerById(t, tm.teamId) || {}).members || []) : [pname(t, tm.teamId)]).forEach((n) => s.add(n));
+      });
+      return [...s];
+    };
+
+    function body() {
+      const statHead = game.stats.map((s) => `<th title="${esc(s.long)}">${esc(s.label)}</th>`).join('');
+      return `
+        <input type="file" id="sbFile" accept="image/*" hidden>
+        <div class="sb-image">
+          ${imageUrl ? `<img src="${imageUrl}" alt="Scoreboard">` : ''}
+          <button class="btn small" data-sb="pick">${icon('upload')}${imageUrl ? 'Byt bild' : 'Välj skärmbild'}</button>
+          ${imageUrl ? `<button class="btn small primary" data-sb="read">${icon('shuffle')}Läs av igen</button>` : ''}
+        </div>
+        ${status ? `<div class="sb-status">${status}</div>` : ''}
+        <div class="cfg-grid">
+          <label class="field"><span>Karta</span><input type="text" data-sb-f="label" value="${esc(draft.label)}" placeholder="t.ex. Mirage"></label>
+          <label class="field"><span>Match (valfritt)</span><select data-sb-f="match"><option value="">Ingen</option>${matches.map((m) => `<option value="${m.key}" ${draft.matchKey === m.key ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></label>
+        </div>
+        <datalist id="sbNames">${rosterNames().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+        ${draft.teams
+          .map(
+            (tm, ti) => `
+          <div class="sb-team">
+            <div class="row">
+              <select data-sb-team="${ti}" class="grow"><option value="">${esc(isTeamMode(t) ? 'Välj lag…' : 'Välj…')}</option>${allIds.map((id) => `<option value="${id}" ${tm.teamId === id ? 'selected' : ''}>${esc(pname(t, id))}</option>`).join('')}</select>
+              <input type="number" class="sb-score" min="0" data-sb-score="${ti}" value="${tm.score != null ? tm.score : ''}" placeholder="Rundor" aria-label="Rundor/poäng">
+            </div>
+            <div class="table-scroll"><table class="sb-table"><thead><tr><th class="l">Spelare</th>${statHead}<th></th></tr></thead><tbody>
+              ${draft.rows
+                .map((r, ri) =>
+                  r.team !== ti
+                    ? ''
+                    : `<tr><td class="l"><input type="text" list="sbNames" data-sb-name="${ri}" value="${esc(r.name)}" placeholder="Namn"></td>${game.stats
+                        .map((s) => `<td><input type="number" step="any" min="0" data-sb-stat="${ri}" data-k="${s.key}" value="${r.stats[s.key] != null ? r.stats[s.key] : ''}"></td>`)
+                        .join('')}<td><button class="icon-btn" data-sb="del" data-r="${ri}" aria-label="Ta bort rad">${icon('close')}</button></td></tr>`
+                )
+                .join('')}
+            </tbody></table></div>
+            <button class="btn small ghost" data-sb="add" data-t="${ti}">${icon('add')}Lägg till spelare</button>
+          </div>`
+          )
+          .join('')}
+        ${existing ? `<button class="btn danger-text ghost block" data-sb="remove">${icon('del')}Ta bort kartan</button>` : ''}`;
+    }
+
+    const modal = openModal({
+      title: existing ? 'Ändra kartstatistik' : 'Lägg till kartstatistik',
+      body: `<div id="sbBody">${body()}</div>`,
+      actions: [
+        { label: 'Avbryt', onClick: () => ctl && ctl.abort() },
+        {
+          label: 'Spara',
+          cls: 'primary',
+          onClick: () => {
+            const rows = draft.rows.filter((r) => r.name && r.name.trim());
+            if (!rows.length) {
+              toast('Lägg till minst en spelare');
+              return false;
+            }
+            const link = matches.find((m) => m.key === draft.matchKey);
+            const entry = {
+              id: draft.id || L.uid(),
+              at: draft.at || Date.now(),
+              label: draft.label.trim(),
+              matchKey: draft.matchKey || '',
+              matchLabel: link ? link.label.split(' · ').slice(1).join(' · ') : draft.matchLabel || '',
+              teams: draft.teams.map((tm) => ({ teamId: tm.teamId || null, name: tm.teamId ? pname(t, tm.teamId) : tm.name || '', score: tm.score })),
+              rows: rows.map((r) => ({ name: r.name.trim(), teamId: (draft.teams[r.team] && draft.teams[r.team].teamId) || null, stats: r.stats })),
+            };
+            const idx = t.statMaps.findIndex((m) => m.id === entry.id);
+            if (idx >= 0) t.statMaps[idx] = entry;
+            else t.statMaps.push(entry);
+            if (ctl) ctl.abort();
+            commit(`Statistik sparad för ${rows.length} spelare`);
+          },
+        },
+      ],
+      onClose: () => {
+        if (ctl) ctl.abort();
+        if (imageUrl) URL.revokeObjectURL(imageUrl);
+      },
+      onOpen: (w) => {
+        const box = $('#sbBody', w);
+        const redraw = () => (box.innerHTML = body());
+        let file = null;
+
+        async function read() {
+          if (!file) return;
+          ctl = new AbortController();
+          const myCtl = ctl;
+          status = `<span class="spinner"></span> Claude läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
+          redraw();
+          const ids = draft.teams.map((tm) => tm.teamId).filter(Boolean);
+          const participants = participantInfo(t, ids.length ? ids : allIds);
+          try {
+            const res = await readScoreboard(t, file, participants, myCtl.signal);
+            if (myCtl.signal.aborted) return;
+            if (res.label) draft.label = res.label;
+            draft.teams = res.teams.length ? res.teams.map((tm) => ({ teamId: tm.teamId, name: tm.name, score: tm.score })) : draft.teams;
+            draft.rows = res.rows.map((r) => ({ name: r.name, team: r.team, stats: r.stats }));
+            const unmatched = res.rows.filter((r) => r.name === r.ingame && !rosterNames().includes(r.name)).length;
+            status = `✅ ${res.rows.length} spelare avlästa. Kontrollera siffrorna mot bilden innan du sparar.${unmatched ? ` ${unmatched} namn hittades inte i laguppställningen – rätta vid behov.` : ''}`;
+          } catch (e) {
+            if (e && e.code === 'cancelled') status = 'Avläsningen stoppades.';
+            else status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
+          }
+          ctl = null;
+          redraw();
+        }
+
+        box.addEventListener('change', (e) => {
+          const el = e.target;
+          if (el.id === 'sbFile') {
+            file = el.files && el.files[0];
+            if (!file) return;
+            if (imageUrl) URL.revokeObjectURL(imageUrl);
+            imageUrl = URL.createObjectURL(file);
+            read();
+          } else if (el.dataset.sbTeam != null) {
+            const ti = Number(el.dataset.sbTeam);
+            draft.teams[ti].teamId = el.value || null;
+            fillRosterRows();
+            redraw();
+          } else if (el.dataset.sbF === 'match') {
+            draft.matchKey = el.value;
+            const link = matches.find((m) => m.key === el.value);
+            if (link && !draft.rows.length) {
+              draft.teams = [link.a, link.b].map((id) => ({ teamId: id, name: '', score: null }));
+              fillRosterRows();
+              redraw();
+            }
+          }
+        });
+        box.addEventListener('input', (e) => {
+          const el = e.target;
+          if (el.dataset.sbF === 'label') draft.label = el.value;
+          else if (el.dataset.sbName != null) draft.rows[Number(el.dataset.sbName)].name = el.value;
+          else if (el.dataset.sbStat != null) {
+            const v = parseNum(el.value);
+            draft.rows[Number(el.dataset.sbStat)].stats[el.dataset.k] = L.isNum(v) ? v : null;
+          } else if (el.dataset.sbScore != null) {
+            const v = parseNum(el.value);
+            draft.teams[Number(el.dataset.sbScore)].score = L.isNum(v) ? v : null;
+          }
+        });
+        box.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-sb]');
+          if (!b) return;
+          const act = b.dataset.sb;
+          if (act === 'pick') $('#sbFile', w).click();
+          else if (act === 'read') read();
+          else if (act === 'stop') ctl && ctl.abort();
+          else if (act === 'add') {
+            draft.rows.push({ name: '', team: Number(b.dataset.t), stats: {} });
+            redraw();
+          } else if (act === 'del') {
+            draft.rows.splice(Number(b.dataset.r), 1);
+            redraw();
+          } else if (act === 'remove') {
+            confirmDialog('Ta bort kartan?', 'Statistiken från den här kartan tas bort från topplistan.', 'Ta bort', () => {
+              checkpoint();
+              t.statMaps = t.statMaps.filter((m) => m.id !== existing.id);
+              modal.close();
+              commit('Kartan borttagen', true);
+            });
+          }
+        });
+        if (opts.pick) setTimeout(() => $('#sbFile', w).click(), 50);
+      },
+    });
+  }
+
+  function statsSettingsHtml(t) {
+    const g = t.settings.game || 'none';
+    const key = getApiKey();
+    return `
+      <div class="section-title">Spel & statistik (${esc(t.name)})</div>
+      <section class="card">
+        <label class="field"><span>Spel</span>
+          <select id="setGame">
+            <option value="none" ${g === 'none' ? 'selected' : ''}>Ingen spelarstatistik</option>
+            ${Object.entries(ST.GAMES).map(([id, gm]) => `<option value="${id}" ${g === id ? 'selected' : ''}>${esc(gm.long)}</option>`).join('')}
+            <option value="custom" ${g === 'custom' ? 'selected' : ''}>Eget spel…</option>
+          </select>
+        </label>
+        ${g === 'custom' ? `
+          <label class="field"><span>Spelets namn</span><input type="text" id="setCustomName" value="${esc(t.settings.customGameName || '')}" placeholder="t.ex. Overwatch"></label>
+          <label class="field"><span>Statistik att spara (kommaseparerat)</span><input type="text" id="setCustomStats" value="${esc(t.settings.customStats || '')}" placeholder="Eliminations, Deaths, Damage, Healing"></label>` : ''}
+        ${g !== 'none' ? `<p class="small muted" style="margin:0">Statistiken visas under fliken Stats. Ladda upp en skärmbild av scoreboarden efter varje karta.</p>` : ''}
+      </section>
+      ${g !== 'none' ? `
+      <section class="card">
+        <h3>Automatisk avläsning med Claude</h3>
+        <p class="small">I webbversionen på claude.ai läses bilderna av med ditt Claude-konto, utan nyckel. I Android-appen och i HTML-filen behövs en egen API-nyckel.</p>
+        <label class="field"><span>Claude API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="sk-ant-…" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
+        <label class="field"><span>Modell</span><input type="text" id="setModel" value="${esc(getModel())}"></label>
+        ${key ? `<button class="btn small danger-text ghost" data-action="clearKey">Ta bort nyckeln</button>` : ''}
+        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Anthropic. Skapa en på console.anthropic.com. Varje avläsning kostar några ören.</p>
+      </section>` : ''}`;
   }
 
   /* ------------------------------ Start ----------------------------- */
