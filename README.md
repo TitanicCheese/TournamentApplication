@@ -64,6 +64,8 @@ Avläsningen använder Claude:
 - **Webbversionen på claude.ai:** via ditt Claude-konto, utan nyckel.
 - **Android-appen / HTML-filen:** lägg in en egen Claude API-nyckel under Mer. Nyckeln
   sparas bara på enheten och följer inte med i säkerhetskopior.
+  Standardmodellen är Claude Haiku 5.5 (ca 1–2 öre per bild). Byt till `claude-opus-5-5`
+  under Mer om avläsningen behöver bli mer exakt (ca 40–70 öre per bild).
 
 Utan AI går det att fylla i siffrorna själv – spelarlistan fylls i automatiskt.
 

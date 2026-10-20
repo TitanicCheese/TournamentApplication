@@ -3245,7 +3245,7 @@
   const ST = window.TStats;
   const KEY_STORE = 'turneringsapp.apikey';
   const MODEL_STORE = 'turneringsapp.aimodel';
-  const DEFAULT_MODEL = 'claude-opus-5-5';
+  const DEFAULT_MODEL = 'claude-haiku-5-5';
   // Modeller där servern kan köra om en nekad förfrågan på en annan modell
   const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5', 'claude-fable-5-1'];
 
@@ -3746,7 +3746,7 @@
         <label class="field"><span>Claude API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="sk-ant-…" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
         <label class="field"><span>Modell</span><input type="text" id="setModel" value="${esc(getModel())}"></label>
         ${key ? `<button class="btn small danger-text ghost" data-action="clearKey">Ta bort nyckeln</button>` : ''}
-        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Anthropic. Skapa en på console.anthropic.com. Varje avläsning kostar några ören.</p>
+        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Anthropic. Skapa en på console.anthropic.com. Med standardmodellen (claude-haiku-5-5) kostar en avläsning ungefär 1–2 öre; claude-opus-5-5 läser svår text bättre men kostar ca 40–70 öre per bild.</p>
       </section>` : ''}`;
   }
 
