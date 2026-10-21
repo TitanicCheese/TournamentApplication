@@ -53,11 +53,11 @@ Välj spel när turneringen skapas eller under **Mer → Spel & statistik**. Då
 **Stats** upp:
 
 1. Ladda upp en skärmbild av scoreboarden efter en karta (från Stats-fliken eller direkt i en match).
-2. Claude läser av varje spelares siffror (t.ex. K, D, A, ADR, HS%, MVP) och kopplar
+2. Claude läser av varje spelares siffror (t.ex. K, D, A, MVP) och kopplar
    spelarnamnen till lagens spelarlistor, även med klantaggar.
 3. Du granskar och rättar siffrorna bredvid bilden och sparar.
 
-Topplistan räknar ihop alla kartor: totalsummor (kills, MVP), snitt (ADR, HS%, ACS) och
+Topplistan räknar ihop alla kartor: totalsummor (kills, MVP), snitt (t.ex. ACS) och
 K/D, KDA och +/−. Sortera på valfri kolumn, filtrera på lag och sätt ett minsta antal kartor.
 
 Avläsningen använder Claude:

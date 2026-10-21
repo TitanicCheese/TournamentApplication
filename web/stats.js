@@ -14,12 +14,10 @@
         { key: 'k', label: 'K', long: 'Kills', kind: 'sum' },
         { key: 'd', label: 'D', long: 'Deaths', kind: 'sum' },
         { key: 'a', label: 'A', long: 'Assists', kind: 'sum' },
-        { key: 'adr', label: 'ADR', long: 'Average damage per round', kind: 'avg' },
-        { key: 'hs', label: 'HS%', long: 'Headshot percentage', kind: 'avg' },
         { key: 'mvp', label: 'MVP', long: 'MVP stars', kind: 'sum' },
         { key: 'score', label: 'Poäng', long: 'Scoreboard score', kind: 'sum' },
       ],
-      hint: 'TAB-tavlan i slutet av kartan: namn, K, D, A, ADR/skada, HS%, MVP-stjärnor och poäng.',
+      hint: 'TAB-tavlan i slutet av kartan: namn, K, D, A, MVP-stjärnor och poäng.',
     },
     valorant: {
       name: 'Valorant',
