@@ -6,14 +6,15 @@ const cs = ST.gameFor({ game: 'cs2' });
 
 test('topplista summerar kills och MVP', () => {
   const maps = [
-    { rows: [{ name: 'TenZ', teamId: 'A', stats: { k: 20, d: 10, a: 5, mvp: 3, score: 50 } }] },
-    { rows: [{ name: 'tenz', teamId: 'A', stats: { k: 10, d: 15, a: 3, mvp: 1, score: 30 } }] },
+    { rows: [{ name: 'TenZ', teamId: 'A', stats: { k: 20, d: 10, a: 5, mvp: 3, score: 50, dmg: 2100 } }] },
+    { rows: [{ name: 'tenz', teamId: 'A', stats: { k: 10, d: 15, a: 3, mvp: 1, score: 30, dmg: 1400 } }] },
   ];
   const [p] = ST.leaderboard(maps, cs);
   assert.equal(p.maps, 2);
   assert.equal(p.values.k, 30);
   assert.equal(p.values.d, 25);
   assert.equal(p.values.mvp, 4);
+  assert.equal(p.values.dmg, 3500);
   assert.equal(p.values.adr, undefined); // ADR och HS% sparas inte för CS2
   assert.equal(p.values.kd, 1.2);
   assert.equal(p.values.diff, 5);
@@ -73,7 +74,7 @@ test('Claudes avläsning kopplas till rätt lag och roster', () => {
 test('schemat kräver alla statistikfält och tillåter inga extra', () => {
   const s = ST.scoreboardSchema(cs);
   const statSchema = s.properties.teams.items.properties.players.items.properties.stats;
-  assert.deepEqual(statSchema.required, ['k', 'd', 'a', 'mvp', 'score']);
+  assert.deepEqual(statSchema.required, ['k', 'd', 'a', 'mvp', 'score', 'dmg']);
   assert.equal(statSchema.additionalProperties, false);
   assert.match(ST.scoreboardPrompt(cs, [{ name: 'Sentinels', members: ['TenZ'] }]), /Sentinels: TenZ/);
 });

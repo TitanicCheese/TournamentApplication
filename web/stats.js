@@ -16,8 +16,9 @@
         { key: 'a', label: 'A', long: 'Assists', kind: 'sum' },
         { key: 'mvp', label: 'MVP', long: 'MVP stars', kind: 'sum' },
         { key: 'score', label: 'Poäng', long: 'Scoreboard score', kind: 'sum' },
+        { key: 'dmg', label: 'Skada', long: 'Total damage dealt', kind: 'sum' },
       ],
-      hint: 'TAB-tavlan i slutet av kartan: namn, K, D, A, MVP-stjärnor och poäng.',
+      hint: 'TAB-tavlan i slutet av kartan: namn, K, D, A, MVP-stjärnor (siffran vid stjärnan, ingen stjärna = 0), poäng och skada.',
     },
     valorant: {
       name: 'Valorant',

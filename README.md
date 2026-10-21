@@ -53,7 +53,7 @@ Välj spel när turneringen skapas eller under **Mer → Spel & statistik**. Då
 **Stats** upp:
 
 1. Ladda upp en skärmbild av scoreboarden efter en karta (från Stats-fliken eller direkt i en match).
-2. Claude läser av varje spelares siffror (t.ex. K, D, A, MVP) och kopplar
+2. Claude läser av varje spelares siffror (t.ex. K, D, A, MVP, poäng, skada) och kopplar
    spelarnamnen till lagens spelarlistor, även med klantaggar.
 3. Du granskar och rättar siffrorna bredvid bilden och sparar.
 
