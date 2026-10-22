@@ -99,25 +99,32 @@
 
   /** Normaliserar ett namn för jämförelse (gemener, utan klantaggar/specialtecken). */
   function normName(s) {
-    return String(s || '')
-      .toLowerCase()
+    const raw = String(s || '').toLowerCase();
+    const n = raw
       .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
-      .replace(/[^a-z0-9]+/g, '');
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+    // Namn med bara symboler ska inte bli tomma och slås ihop med varandra
+    return n || raw.replace(/\s+/g, '');
   }
 
-  /** Hittar bästa namnet i en lista (exakt, sedan början/innehåller). */
+  /**
+   * Hittar bästa namnet i en lista: exakt träff, annars ett namn som börjar eller slutar likadant
+   * (avklippta namn eller lagtagg före namnet i skärmklipp), aldrig mitt i ett annat namn. Vid flera möjliga träffar returneras null.
+   */
   function matchName(name, candidates) {
     const n = normName(name);
     if (!n) return null;
-    let hit = candidates.find((c) => normName(c) === n);
+    const hit = candidates.find((c) => normName(c) === n);
     if (hit) return hit;
-    hit = candidates.find((c) => {
+    const near = candidates.filter((c) => {
       const m = normName(c);
-      return m.length >= 3 && (n.includes(m) || m.includes(n));
+      if (Math.min(m.length, n.length) < 3) return false;
+      const [short, long] = m.length < n.length ? [m, n] : [n, m];
+      return long.startsWith(short) || long.endsWith(short);
     });
-    return hit || null;
+    return near.length === 1 ? near[0] : null;
   }
 
   const num = (v) => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : null);
@@ -135,6 +142,19 @@
         const key = normName(row.name) + '|' + (row.teamId || '');
         const p = (players[key] = players[key] || { key: key, name: row.name, teamId: row.teamId || null, maps: 0, sums: {}, counts: {} });
         p.maps++;
+        // K/D, +/- och KDA räknas bara på kartor där både kills och deaths finns
+        const k = num(row.stats && row.stats.k), d = num(row.stats && row.stats.d), a = num(row.stats && row.stats.a);
+        if (k != null && d != null) {
+          p.kd = p.kd || { k: 0, d: 0, ka: 0, da: 0, a: 0, withA: 0 };
+          p.kd.k += k;
+          p.kd.d += d;
+          if (a != null) {
+            p.kd.ka += k;
+            p.kd.da += d;
+            p.kd.a += a;
+            p.kd.withA++;
+          }
+        }
         game.stats.forEach((s) => {
           const v = num(row.stats && row.stats[s.key]);
           if (v == null) return;
@@ -149,10 +169,10 @@
         if (!p.counts[s.key]) v[s.key] = null;
         else v[s.key] = s.kind === 'avg' ? r2(p.sums[s.key] / p.counts[s.key]) : r2(p.sums[s.key]);
       });
-      if (hasStat(game, 'k') && hasStat(game, 'd') && v.k != null && v.d != null) {
-        v.kd = r2(v.k / Math.max(1, v.d));
-        v.diff = v.k - v.d;
-        if (v.a != null) v.kda = r2((v.k + v.a) / Math.max(1, v.d));
+      if (hasStat(game, 'k') && hasStat(game, 'd') && p.kd) {
+        v.kd = r2(p.kd.k / Math.max(1, p.kd.d));
+        v.diff = p.kd.k - p.kd.d;
+        if (hasStat(game, 'a') && p.kd.withA) v.kda = r2((p.kd.ka + p.kd.a) / Math.max(1, p.kd.da));
       }
       return { key: p.key, name: p.name, teamId: p.teamId, maps: p.maps, values: v };
     });

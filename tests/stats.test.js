@@ -85,3 +85,34 @@ test('eget spel med egna fält', () => {
   assert.equal(ST.gameFor({ game: 'custom', customStats: '' }), null);
   assert.equal(ST.gameFor({ game: 'none' }), null);
 });
+
+test('topplistan håller isär namn utan latinska bokstäver', () => {
+  const maps = [{ rows: [
+    { name: '李伟', teamId: 'A', stats: { k: 20, d: 10 } },
+    { name: '王芳', teamId: 'A', stats: { k: 5, d: 15 } },
+    { name: '★', teamId: 'A', stats: { k: 1, d: 1 } },
+    { name: '☆', teamId: 'A', stats: { k: 2, d: 2 } },
+  ] }];
+  const rows = ST.leaderboard(maps, cs);
+  assert.equal(rows.length, 4);
+  assert.equal(rows.find((r) => r.name === '李伟').values.k, 20);
+});
+
+test('K/D och +/- räknas bara på kartor där både K och D finns', () => {
+  const maps = [
+    { rows: [{ name: 'Zed', teamId: 'A', stats: { k: 30, d: null, a: 2 } }] },
+    { rows: [{ name: 'Zed', teamId: 'A', stats: { k: 10, d: 10, a: 4 } }] },
+  ];
+  const [p] = ST.leaderboard(maps, cs);
+  assert.equal(p.values.k, 40); // kills summeras ändå över alla kartor
+  assert.equal(p.values.kd, 1);
+  assert.equal(p.values.diff, 0);
+  assert.equal(p.values.kda, 1.4);
+});
+
+test('namnmatchning väljer inte ett namn som bara finns mitt i ett annat', () => {
+  assert.equal(ST.matchName('Joanna', ['Ann', 'Bob']), null);
+  assert.equal(ST.matchName('[NIP] TenZ', ['tenz', 'Bob']), 'tenz');
+  assert.equal(ST.matchName('Shroudy', ['Shroud', 'Bob']), 'Shroud'); // avklippt namn i skärmklipp
+  assert.equal(ST.matchName('Ann', ['Anna', 'Annie']), null); // tvetydigt
+});
