@@ -2085,8 +2085,9 @@
             const d = Number(b.dataset.adj);
             if (timer.running) timer.endAt = Math.max(Date.now() + 1000, timer.endAt + d);
             else {
+              // Före start ändras också längden som Nollställ går tillbaka till
+              if (!timer.done && timer.remaining === timer.duration) timer.duration = Math.max(1000, timer.duration + d);
               timer.remaining = Math.max(1000, timer.remaining + d);
-              timer.duration = Math.max(1000, timer.duration + d);
               timer.done = false;
             }
             timerTick();
