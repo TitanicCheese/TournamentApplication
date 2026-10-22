@@ -102,13 +102,13 @@ body {
 .window {
   position: absolute; left: 50%; top: -4vh; width: min(84vw, 520px); height: 104vh; translate: -50% 0;
   fill: var(--light); filter: blur(7px); transform: skewX(-7deg); transform-origin: top;
-  opacity: 0; animation: appear-window 4s var(--ease) .1s forwards;
+  opacity: var(--window); animation: appear-window 4s var(--ease) .1s backwards;
 }
 .grain {
   position: absolute; inset: 0; opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-@keyframes appear-window { to { opacity: var(--window); } }
+@keyframes appear-window { from { opacity: 0; } }
 
 /* Långsam intoning när appen öppnas */
 .topbar, .view, .tabbar { animation: rise 1.4s var(--ease) both; }
