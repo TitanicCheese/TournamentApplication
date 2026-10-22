@@ -1913,6 +1913,10 @@
       toast('Filen är inte en giltig säkerhetskopia');
       return;
     }
+    if (L.findUnsafeImport(data)) {
+      toast('Filen innehåller ogiltiga tecken och importerades inte');
+      return;
+    }
     // Stöd både hela databasen och en enskild turnering
     if (data && Array.isArray(data.players) && !data.tournaments) {
       data = { tournaments: { [data.id || L.uid()]: data }, activeId: data.id };
