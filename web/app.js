@@ -3295,7 +3295,8 @@
   // Egen nyckel till Mistrals gratisnivå (console.mistral.ai). Sparas bara på enheten.
   const KEY_STORE = 'turneringsapp.mistralkey';
   const MODEL_STORE = 'turneringsapp.mistralmodel';
-  const DEFAULT_MODEL = 'mistral-medium-latest';
+  // Största modellen på gratisplanen som läser bilder; small och medium kräver betalplan
+  const DEFAULT_MODEL = 'ministral-14b-latest';
   const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
   // Tidigare versioner sparade en Claude-nyckel här. Den används inte längre.
   try {
@@ -3394,28 +3395,28 @@
     });
   }
 
+  /** Läser av med Mistral. Försöker en gång till efter tillfälliga fel (för många anrop, serverfel, trasigt svar). */
+  async function readWithMistral(game, teams, file, signal) {
+    try {
+      return await mistralOnce(game, teams, file, signal);
+    } catch (e) {
+      if (!['rate_limited', 'upstream_error', 'invalid_json'].includes(e && e.code)) throw e;
+      await new Promise((r) => setTimeout(r, 2000));
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      return mistralOnce(game, teams, file, signal);
+    }
+  }
+
   /** Skickar bilden till Mistral och returnerar svaret som följer schemat. Fel kastas som { code }. */
-  async function readWithMistral(file, prompt, schema, signal) {
+  async function mistralOnce(game, teams, file, signal) {
     const image = await imageToBase64(file);
+    const body = ST.mistralRequest(game, teams, getModel(), 'data:' + image.mediaType + ';base64,' + image.data);
     let res;
     try {
       res = await fetch(MISTRAL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getApiKey() },
-        body: JSON.stringify({
-          model: getModel(),
-          temperature: 0,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'image_url', image_url: 'data:' + image.mediaType + ';base64,' + image.data },
-                { type: 'text', text: prompt },
-              ],
-            },
-          ],
-          response_format: { type: 'json_schema', json_schema: { name: 'scoreboard', schema: schema, strict: true } },
-        }),
+        body: JSON.stringify(body),
         signal: signal,
       });
     } catch (e) {
@@ -3449,7 +3450,7 @@
     if (reader.kind === 'sample') {
       reading = await reader.sample.json(ST.scoreboardPrompt(game, teams, true), { images: [file], signal: signal, cache: false });
     } else {
-      reading = await readWithMistral(file, ST.scoreboardPrompt(game, teams, false), ST.scoreboardSchema(game), signal);
+      reading = await readWithMistral(game, teams, file, signal);
     }
     return ST.normalizeReading(reading, game, participants);
   }
@@ -3457,7 +3458,7 @@
   const AI_ERRORS = {
     no_ai: 'Automatisk avläsning är inte påslagen – fyll i siffrorna själv eller lägg till en API-nyckel under Mer.',
     bad_key: 'API-nyckeln fungerar inte. Kontrollera den under Mer → Spel & statistik.',
-    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen. Fungerar det aldrig: aktivera gratisplanen (Experiment) på console.mistral.ai.',
+    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen. Fungerar det aldrig: välj modellen ministral-14b-latest under Mer, andra modeller ingår inte alltid i gratisplanen.',
     offline: 'Ingen internetanslutning – fyll i siffrorna själv.',
     refused: 'Bilden kunde inte läsas av. Prova en annan skärmbild eller fyll i själv.',
     invalid_json: 'Avläsningen blev ofullständig. Försök igen eller fyll i själv.',
@@ -3857,7 +3858,7 @@
       ${g !== 'none' ? `
       <section class="card">
         <h3>Automatisk avläsning</h3>
-        <p class="small">Skärmbilder av scoreboarden läses av med Mistral. Det är gratis men kräver en egen nyckel. Skapa ett konto på console.mistral.ai, välj gratisplanen (Experiment) och skapa en API-nyckel.</p>
+        <p class="small">Skärmbilder av scoreboarden läses av med Mistral. Det är gratis men kräver en egen nyckel: skapa ett gratiskonto på console.mistral.ai och sedan en nyckel under API Keys.</p>
         <label class="field"><span>Mistral API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="Klistra in nyckeln" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
         <label class="field"><span>Modell</span><input type="text" id="setModel" value="${esc(getModel())}"></label>
         ${key ? `<button class="btn small danger-text ghost" data-action="clearKey">Ta bort nyckeln</button>` : ''}

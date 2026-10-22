@@ -60,13 +60,12 @@ Välj spel när turneringen skapas eller under **Mer → Spel & statistik**. Då
 Topplistan räknar ihop alla kartor: totalsummor (kills, MVP), snitt (t.ex. ACS) och
 K/D, KDA och +/−. Sortera på valfri kolumn, filtrera på lag och sätt ett minsta antal kartor.
 
-Avläsningen använder Mistrals gratisplan (Experiment):
-1. Skapa ett konto på [console.mistral.ai](https://console.mistral.ai) och aktivera gratisplanen.
-   Det kräver ett verifierat telefonnummer men inget betalkort.
-2. Skapa en API-nyckel och klistra in den under **Mer → Spel & statistik**. Nyckeln sparas
+Avläsningen använder Mistrals gratisplan:
+1. Skapa ett gratiskonto på [console.mistral.ai](https://console.mistral.ai). Inget betalkort behövs.
+2. Skapa en API-nyckel under **API Keys** och klistra in den under **Mer → Spel & statistik**. Nyckeln sparas
    bara på enheten och följer inte med i säkerhetskopior.
 
-Standardmodellen är `mistral-medium-latest`. På gratisplanen får Mistral använda bilderna
+Standardmodellen är `ministral-14b-latest`, den största modellen på gratisplanen som kan läsa bilder. På gratisplanen får Mistral använda bilderna
 för att förbättra sina modeller. Webbversionen på claude.ai använder i stället ditt Claude-konto.
 
 Utan AI går det att fylla i siffrorna själv – spelarlistan fylls i automatiskt.
