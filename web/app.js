@@ -1687,7 +1687,7 @@
         <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
       </ul>
 
-      ${isStages(t) ? '' : `<div class="section-title">Poängräkning (${esc(t.name)})</div>
+      ${isStages(t) ? '' : `<div class="section-title">Poängräkning</div>
       <section class="card">
         <label class="field"><span>Räkna bara bästa X omgångar (0 = alla)</span><input type="number" min="0" id="setBestOf" value="${t.settings.bestOf || 0}"></label>
         <label class="field"><span>Snabbknappar för poäng (t.ex. 3, 1, 0)</span><input type="text" id="setQuick" value="${esc(t.settings.quickValues)}" placeholder="Tomt = inga snabbknappar"></label>
@@ -1713,7 +1713,7 @@
       <div class="section-title">Utseende</div>
       <section class="card">
         <div class="seg" style="margin:0">
-          ${[['auto', 'Automatiskt'], ['light', 'Ljust'], ['dark', 'Mörkt']]
+          ${[['auto', 'Auto'], ['light', 'Ljust'], ['dark', 'Mörkt']]
             .map(([v, l]) => `<button data-action="theme" data-v="${v}" class="${db.settings.theme === v ? 'on' : ''}">${l}</button>`)
             .join('')}
         </div>
@@ -3947,7 +3947,7 @@
     const g = t.settings.game || 'none';
     const key = getApiKey();
     return `
-      <div class="section-title">Spel & statistik (${esc(t.name)})</div>
+      <div class="section-title">Spel & statistik</div>
       <section class="card">
         <label class="field"><span>Spel</span>
           <select id="setGame">
