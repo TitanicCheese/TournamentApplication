@@ -1,7 +1,8 @@
 /* ==========================================================================
    Frostat glas på linne, bläck och ljuset från ett kyrkfönster.
-   Samma utseende som donsokallarn.se. Typsnitt: Fraunces och Caveat (SIL OFL).
+   Samma utseende som donsokallarn.se. Typsnitt: Atkinson Hyperlegible Next, Fraunces och Caveat (SIL OFL).
    ========================================================================== */
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url(fonts/atkinson.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
 @font-face { font-family: "Fraunces"; src: url(fonts/fraunces.woff2) format("woff2"); font-weight: 300 900; font-display: swap; }
 @font-face { font-family: "Caveat"; src: url(fonts/caveat.woff2) format("woff2"); font-weight: 400 700; font-display: swap; }
 
@@ -42,6 +43,7 @@
   --window: .7;
   --grain: .28;
 
+  --sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
   --ease: cubic-bezier(.2, .7, .15, 1);
@@ -91,10 +93,9 @@ body {
   min-height: 100vh;
   background: transparent;
   color: var(--text);
-  font-family: var(--serif);
-  font-variation-settings: "SOFT" 100, "WONK" 0;
+  font-family: var(--sans);
   font-size: 16px;
-  line-height: 1.4;
+  line-height: 1.45;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 34px);
@@ -122,6 +123,7 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 svg { width: 22px; height: 22px; fill: currentColor; flex: none; }
+h1, h2, h3, h4, .title-btn, .big-title, .champion .cname, .random-name, .wizard-card b { font-family: var(--serif); }
 h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1; }
 
 /* Gemensam glasyta */
@@ -205,7 +207,7 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
 }
 .card h3 { margin: 0 0 10px; font-size: 1.15rem; }
 .card p { margin: 0 0 10px; color: var(--muted); }
-.section-title { margin: 24px 8px 6px; font: 600 1.35rem/1.1 var(--hand); color: var(--primary); }
+.section-title { margin: 26px 6px 8px; font: 600 1.15rem/1.2 var(--serif); font-variation-settings: "SOFT" 100, "WONK" 1; color: var(--text); }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .row { display: flex; gap: 8px; align-items: center; }
@@ -667,7 +669,7 @@ details.cfg[open]::details-content { block-size: auto; }
 .hl-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 .stat.hl { text-align: left; padding: 12px; display: flex; flex-direction: column; gap: 2px; background: var(--glass); border-color: var(--glass-edge); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
 .stat.hl span { font-size: .78rem; font-weight: 600; }
-.stat.hl b { font-size: 1.7rem; font-weight: 600; font-variation-settings: "SOFT" 100, "opsz" 144; }
+.stat.hl b { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat.hl em { font-style: normal; font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); }
 .standings.lb { min-width: 100%; width: max-content; }
