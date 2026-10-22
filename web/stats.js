@@ -99,25 +99,32 @@
 
   /** Normaliserar ett namn för jämförelse (gemener, utan klantaggar/specialtecken). */
   function normName(s) {
-    return String(s || '')
-      .toLowerCase()
+    const raw = String(s || '').toLowerCase();
+    const n = raw
       .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
-      .replace(/[^a-z0-9]+/g, '');
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+    // Namn med bara symboler ska inte bli tomma och slås ihop med varandra
+    return n || raw.replace(/\s+/g, '');
   }
 
-  /** Hittar bästa namnet i en lista (exakt, sedan början/innehåller). */
+  /**
+   * Hittar bästa namnet i en lista: exakt träff, annars ett namn som börjar eller slutar likadant
+   * (avklippta namn eller lagtagg före namnet i skärmklipp), aldrig mitt i ett annat namn. Vid flera möjliga träffar returneras null.
+   */
   function matchName(name, candidates) {
     const n = normName(name);
     if (!n) return null;
-    let hit = candidates.find((c) => normName(c) === n);
+    const hit = candidates.find((c) => normName(c) === n);
     if (hit) return hit;
-    hit = candidates.find((c) => {
+    const near = candidates.filter((c) => {
       const m = normName(c);
-      return m.length >= 3 && (n.includes(m) || m.includes(n));
+      if (Math.min(m.length, n.length) < 3) return false;
+      const [short, long] = m.length < n.length ? [m, n] : [n, m];
+      return long.startsWith(short) || long.endsWith(short);
     });
-    return hit || null;
+    return near.length === 1 ? near[0] : null;
   }
 
   const num = (v) => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : null);

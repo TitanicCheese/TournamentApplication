@@ -85,3 +85,22 @@ test('eget spel med egna fält', () => {
   assert.equal(ST.gameFor({ game: 'custom', customStats: '' }), null);
   assert.equal(ST.gameFor({ game: 'none' }), null);
 });
+
+test('topplistan håller isär namn utan latinska bokstäver', () => {
+  const maps = [{ rows: [
+    { name: '李伟', teamId: 'A', stats: { k: 20, d: 10 } },
+    { name: '王芳', teamId: 'A', stats: { k: 5, d: 15 } },
+    { name: '★', teamId: 'A', stats: { k: 1, d: 1 } },
+    { name: '☆', teamId: 'A', stats: { k: 2, d: 2 } },
+  ] }];
+  const rows = ST.leaderboard(maps, cs);
+  assert.equal(rows.length, 4);
+  assert.equal(rows.find((r) => r.name === '李伟').values.k, 20);
+});
+
+test('namnmatchning väljer inte ett namn som bara finns mitt i ett annat', () => {
+  assert.equal(ST.matchName('Joanna', ['Ann', 'Bob']), null);
+  assert.equal(ST.matchName('[NIP] TenZ', ['tenz', 'Bob']), 'tenz');
+  assert.equal(ST.matchName('Shroudy', ['Shroud', 'Bob']), 'Shroud'); // avklippt namn i skärmklipp
+  assert.equal(ST.matchName('Ann', ['Anna', 'Annie']), null); // tvetydigt
+});
