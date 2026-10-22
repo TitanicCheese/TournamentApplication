@@ -455,7 +455,27 @@
     el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, easing: 'cubic-bezier(.2, .7, .15, 1)' });
   }
 
+  // Ytor som ändrar höjd när samma vy ritas om glider mjukt till sin nya höjd.
+  // Ytorna paras ihop i ordning och bara när klassnamnet är detsamma.
+  const MORPH = '.card, .list, .standings, .empty, .sb-team, details.cfg';
+  let lastView = '';
   function render() {
+    const view = $('#view');
+    const key = ui.wizard ? '' : db.activeId + ':' + ui.tab;
+    const animate = key && key === lastView && view.animate && !(reducedMotion && reducedMotion.matches);
+    const before = animate ? $$(MORPH, view).map((el) => ({ cls: el.className, h: el.getBoundingClientRect().height })) : [];
+    lastView = key;
+    drawView();
+    if (!before.length) return;
+    $$(MORPH, view).forEach((el, i) => {
+      const b = before[i];
+      const h = el.getBoundingClientRect().height;
+      if (!b || b.cls !== el.className || Math.abs(h - b.h) < 3) return;
+      el.animate([{ height: b.h + 'px', overflow: 'hidden' }, { height: h + 'px', overflow: 'hidden' }], { duration: 320, easing: 'cubic-bezier(.2, .7, .15, 1)' });
+    });
+  }
+
+  function drawView() {
     applyTheme();
     const t = T();
     $('#tName').textContent = t.name;
