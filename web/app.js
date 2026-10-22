@@ -2759,7 +2759,8 @@
     return `<div class="banner">${icon('trophy')}<div class="grow"><b>${esc(t.stages[i].name)} är klar!</b><div class="small">${R.qualifiers.length} går vidare till ${esc(next.name)}.</div></div><button class="btn small primary" data-action="goFormat">Till nästa fas</button></div>`;
   }
 
-  function matchLine(t, m, i) {
+  // inGroup: matchen visas i sitt gruppkort, så gruppnamnet behövs inte
+  function matchLine(t, m, i, inGroup) {
     const name = (id, side) => {
       if (id) return esc(pname(t, id));
       return m.state === 'bye' ? '<i class="muted">Walk over</i>' : '<span class="muted">-</span>';
@@ -2767,7 +2768,7 @@
     const cls = (id) => (m.winner && id === m.winner ? 'win' : m.winner && id ? 'lose' : '');
     const score = (v) => (v != null ? fmt(v) : '');
     return `<button class="mline ${m.state}" data-action="match" data-i="${i}" data-id="${m.id}">
-      <span class="mline-meta">${esc(m.groupName ? m.groupName + ' · ' : '')}${esc(m.label || '')}${m.bo ? ` · ${boText(m.bo)}` : ''}</span>
+      <span class="mline-meta">${esc(m.groupName && !inGroup ? m.groupName + ' · ' : '')}${esc(m.label || '')}${m.bo ? ` · ${boText(m.bo)}` : ''}</span>
       <span class="mline-row ${cls(m.a)}"><span class="pn">${name(m.a)}</span><span class="ps">${score(m.sa)}</span></span>
       <span class="mline-row ${cls(m.b)}"><span class="pn">${name(m.b)}</span><span class="ps">${score(m.sb)}</span></span>
       ${m.draw ? '<span class="mline-meta">Oavgjort</span>' : ''}
@@ -3161,7 +3162,12 @@
                       `<tr class="${r.status}"><td class="l">${r.pos}</td><td class="l">${esc(pname(t, r.id))}</td><td>${r.played}</td><td>${r.w}</td>${st.cfg.allowDraw ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td>${r.mf - r.ma > 0 ? '+' : ''}${r.mf - r.ma}</td><td><b>${r.pts}</b></td></tr>`
                   )
                   .join('')}</tbody></table>`;
-          return `<section class="card group-card"><h3>${esc(g.name)}</h3>${table}<div class="mlist compact">${g.matches.map((m) => matchLine(t, m, i)).join('')}</div></section>`;
+          // Matcher där inget lag är klart än blir en rad i stället för tomma kort
+          const known = g.matches.filter((m) => m.a || m.b);
+          const later = g.matches.filter((m) => !m.a && !m.b);
+          return `<section class="card group-card"><h3>${esc(g.name)}</h3>${table}<div class="mlist compact">${known.map((m) => matchLine(t, m, i, true)).join('')}</div>${
+            later.length ? `<p class="mlist-later">Sedan: ${later.map((m) => esc(m.label)).join(', ')}</p>` : ''
+          }</section>`;
         })
         .join('')}</div>`;
       html += `<p class="small muted" style="text-align:center">Grönt = vidare · Rött = utslagen</p>`;

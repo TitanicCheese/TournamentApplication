@@ -543,6 +543,7 @@ body.big .standings td { padding: 14px 12px; }
 .pill.live { background: var(--ink); color: var(--ink-text); }
 .pill.ready { background: color-mix(in srgb, var(--gold) 22%, transparent); color: color-mix(in srgb, var(--gold) 55%, var(--text)); }
 .pill.done { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.mlist-later { margin: 10px 4px 0; font-size: .85rem; color: var(--muted); }
 .stage-card > .row:first-child .icon-btn { margin: -8px -8px -8px -2px; }
 
 /* Menyer i dialoger (turneringar, faser) */
