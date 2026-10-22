@@ -95,7 +95,10 @@
 
   function normalizeDb(d) {
     if (!d || typeof d !== 'object' || !d.tournaments || typeof d.tournaments !== 'object') return null;
-    Object.values(d.tournaments).forEach(normalize);
+    Object.entries(d.tournaments).forEach(([id, t]) => {
+      t.id = id;
+      normalize(t);
+    });
     if (!Object.keys(d.tournaments).length) {
       const t = newTournament('Min turnering');
       d.tournaments[t.id] = t;
@@ -1115,7 +1118,8 @@
   }
 
   function addRound(t) {
-    const n = t.rounds.length + 1;
+    let n = t.rounds.length + 1;
+    while (t.rounds.some((x) => x.name === 'Omgång ' + n)) n++;
     const r = { id: L.uid(), name: 'Omgång ' + n, scores: {} };
     t.rounds.push(r);
     ui.roundId = r.id;
@@ -2018,7 +2022,8 @@
     }
     // Stöd både hela databasen och en enskild turnering
     if (data && Array.isArray(data.players) && !data.tournaments) {
-      data = { tournaments: { [data.id || L.uid()]: data }, activeId: data.id };
+      const id = data.id || L.uid();
+      data = { tournaments: { [id]: data }, activeId: id };
     }
     const incoming = normalizeDb(data);
     if (!incoming) {
@@ -2183,8 +2188,9 @@
             const d = Number(b.dataset.adj);
             if (timer.running) timer.endAt = Math.max(Date.now() + 1000, timer.endAt + d);
             else {
+              // Före start ändras också längden som Nollställ går tillbaka till
+              if (!timer.done && timer.remaining === timer.duration) timer.duration = Math.max(1000, timer.duration + d);
               timer.remaining = Math.max(1000, timer.remaining + d);
-              timer.duration = Math.max(1000, timer.duration + d);
               timer.done = false;
             }
             timerTick();
@@ -3833,6 +3839,7 @@
 
         async function read() {
           if (!file) return;
+          if (ctl) ctl.abort();
           ctl = new AbortController();
           const myCtl = ctl;
           status = `<span class="spinner"></span> Claude läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
@@ -3848,6 +3855,7 @@
             const unmatched = res.rows.filter((r) => r.name === r.ingame && !rosterNames().includes(r.name)).length;
             status = `✅ ${res.rows.length} spelare avlästa. Kontrollera siffrorna mot bilden innan du sparar.${unmatched ? ` ${unmatched} namn hittades inte i laguppställningen – rätta vid behov.` : ''}`;
           } catch (e) {
+            if (ctl !== myCtl) return; // en nyare avläsning har tagit över
             if (e && e.code === 'cancelled') status = 'Avläsningen stoppades.';
             else status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
           }
