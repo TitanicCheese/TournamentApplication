@@ -734,6 +734,31 @@ body.wizard { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
 .wizard-icon { grid-column: 1; grid-row: 1 / span 2; display: grid; place-items: start; padding-top: 2px; color: var(--primary); }
 .wizard-icon svg { width: 24px; height: 24px; }
 
+/* ----------------------------------------- Dator: flikarna som sidokolumn */
+@media (min-width: 1000px) {
+  :root { --side-w: 216px; }
+  body { padding-bottom: 40px; }
+  body:not(.big, .wizard) { padding-left: var(--side-w); }
+  .tabbar {
+    left: 0; right: auto; top: 0; bottom: 0; width: var(--side-w); max-width: none; height: auto; margin: 0;
+    flex-direction: column; gap: 2px; padding: calc(env(safe-area-inset-top) + 76px) 14px 20px;
+    background: var(--glass); border: 0; border-right: 1px solid var(--border); border-radius: 0;
+    box-shadow: var(--glass-shine);
+  }
+  .tabbar button, .tabbar.six button {
+    flex: none; flex-direction: row; justify-content: flex-start; gap: 12px;
+    min-height: 46px; padding: 0 14px; border-radius: var(--radius-sm);
+    font-size: 1rem; text-align: left; transition: color .3s, background-color .3s;
+  }
+  .tabbar button svg, .tabbar.six button svg { width: 21px; height: 21px; }
+  .tabbar button:hover { color: var(--text); background: var(--primary-soft); }
+  .tabbar button:active { transform: none; }
+  .tabbar button.active { background: var(--primary-soft); }
+  .tabbar button.active::after { left: 47px; right: auto; width: 44px; bottom: 7px; }
+  .toast { bottom: 26px; }
+  body:not(.big, .wizard) .toast { left: calc(50% + var(--side-w) / 2); }
+}
+
 @media (hover: hover) {
   .btn:hover:not(:disabled) { background-color: var(--primary-soft); }
   .btn.primary:hover:not(:disabled) { background-color: var(--ink); opacity: .88; }
