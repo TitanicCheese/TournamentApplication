@@ -3509,7 +3509,7 @@
   const AI_ERRORS = {
     no_ai: 'Automatisk avläsning är inte påslagen – fyll i siffrorna själv eller lägg till en API-nyckel under Mer.',
     bad_key: 'API-nyckeln fungerar inte. Kontrollera den under Mer → Spel & statistik.',
-    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen. Med Mistral gratis: använd modellen ministral-14b-latest, andra modeller ingår inte alltid.',
+    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen.',
     offline: 'Ingen internetanslutning – fyll i siffrorna själv.',
     refused: 'Bilden kunde inte läsas av. Prova en annan skärmbild eller fyll i själv.',
     invalid_json: 'Avläsningen blev ofullständig. Försök igen eller fyll i själv.',
@@ -3789,7 +3789,11 @@
             status = `✅ ${res.rows.length} spelare avlästa. Kontrollera siffrorna mot bilden innan du sparar.${unmatched ? ` ${unmatched} namn hittades inte i laguppställningen – rätta vid behov.` : ''}`;
           } catch (e) {
             if (e && e.code === 'cancelled') status = 'Avläsningen stoppades.';
-            else status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
+            else {
+              status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
+              // Mistrals gratisplan ger vissa modeller 0 anrop per minut, så tipsa om rätt modell
+              if (e && e.code === 'rate_limited' && getProvider() === 'mistral') status += ' Fungerar det aldrig: använd modellen ministral-14b-latest, andra modeller ingår inte alltid i gratisplanen.';
+            }
           }
           ctl = null;
           redraw();
