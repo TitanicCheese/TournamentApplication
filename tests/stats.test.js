@@ -58,8 +58,8 @@ test('Claudes avläsning kopplas till rätt lag och roster', () => {
   const reading = {
     map: 'Ascent',
     teams: [
-      { name: 'FNC', score: 11, players: [{ name: 'FNC Derke', roster_name: '', stats: { k: 20, d: 18, a: 3, mvp: -1, score: 40 } }] },
-      { name: '', score: 13, players: [{ name: 'SEN TenZ', roster_name: 'TenZ', stats: { k: 25, d: 15, a: 4, mvp: 4, score: 60 } }] },
+      { name: 'FNC', team_score: 11, players: [{ name: 'FNC Derke', roster_name: '', stats: { kills: 20, deaths: 18, assists: 3, mvp_stars: -1, scoreboard_score: 40 } }] },
+      { name: '', team_score: 13, players: [{ name: 'SEN TenZ', roster_name: 'TenZ', stats: { kills: 25, deaths: 15, assists: 4, mvp_stars: 4, scoreboard_score: 60 } }] },
     ],
   };
   const out = ST.normalizeReading(reading, cs, participants);
@@ -69,12 +69,18 @@ test('Claudes avläsning kopplas till rätt lag och roster', () => {
   assert.equal(out.rows[0].stats.mvp, null); // -1 = syns inte
   assert.equal(out.rows[1].name, 'TenZ');
   assert.equal(out.rows[1].stats.mvp, 4);
+  assert.equal(out.rows[1].stats.k, 25);
+  assert.equal(out.rows[1].stats.score, 60);
 });
 
 test('schemat kräver alla statistikfält och tillåter inga extra', () => {
   const s = ST.scoreboardSchema(cs);
   const statSchema = s.properties.teams.items.properties.players.items.properties.stats;
-  assert.deepEqual(statSchema.required, ['k', 'd', 'a', 'mvp', 'score', 'dmg']);
+  assert.deepEqual(statSchema.required, ['kills', 'deaths', 'assists', 'mvp_stars', 'scoreboard_score', 'total_damage_dealt']);
+  // Spelarens "score" får aldrig heta som lagets resultat
+  const rl = ST.gameFor({ game: 'rl' });
+  const rlStats = ST.scoreboardSchema(rl).properties.teams.items.properties.players.items.properties.stats;
+  assert.ok(!rlStats.required.includes('team_score'));
   assert.equal(statSchema.additionalProperties, false);
   assert.match(ST.scoreboardPrompt(cs, [{ name: 'Sentinels', members: ['TenZ'] }]), /Sentinels: TenZ/);
 });
