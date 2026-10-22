@@ -244,3 +244,21 @@ test('Swiss ger ingen deltagare mer än en walkover', () => {
     assert.ok(Object.values(byes).every((c) => c === 1), `${n} deltagare: ${JSON.stringify(byes)}`);
   }
 });
+
+test('startProblem stoppar GSL-grupper med fler än 4', () => {
+  const gsl = S.newStage('gsl');
+  gsl.cfg.groups = 2;
+  assert.match(S.startProblem(gsl, 16), /4/);
+  gsl.cfg.groups = 4;
+  assert.equal(S.startProblem(gsl, 16), '');
+  assert.match(S.startProblem(gsl, 17), /5 grupper/);
+});
+
+test('startProblem stoppar heat där ingen åker ut', () => {
+  const heats = S.newStage('heats');
+  Object.assign(heats.cfg, { heatSize: 4, advancePerHeat: 3 });
+  assert.match(S.startProblem(heats, 9), /åker ut/);
+  assert.match(S.startProblem(heats, 16), /åker ut/);
+  Object.assign(heats.cfg, { heatSize: 4, advancePerHeat: 2 });
+  for (const n of [5, 8, 9, 16, 30]) assert.equal(S.startProblem(heats, n), '', `${n} deltagare`);
+});

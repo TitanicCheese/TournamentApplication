@@ -2383,7 +2383,7 @@
         }
         case 'startStage': {
           const seeds = seedsFor(t, i);
-          const problem = startProblem(st, seeds.length);
+          const problem = SG.startProblem(st, seeds.length);
           if (problem) {
             toast(problem);
             return;
@@ -2447,15 +2447,6 @@
       t.presetId = t.presetId === 'league' ? 'custom' : t.presetId;
       commit();
     };
-  }
-
-  function startProblem(st, n) {
-    const c = st.cfg;
-    if (st.type === 'heats' && c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än heatstorleken';
-    if (st.type === 'double' && n < 3) return 'Dubbelutslagning kräver minst 3 deltagare';
-    if (st.type === 'swiss' && n < 4) return 'Swiss kräver minst 4 deltagare';
-    if ((st.type === 'gsl' || st.type === 'rr') && c.groups < 1) return 'Minst 1 grupp';
-    return '';
   }
 
   function cfgField(i, key, label, value, opts) {

@@ -824,6 +824,30 @@
     });
   }
 
+  /** Felmeddelande om fasen inte kan startas med n deltagare, annars ''. */
+  function startProblem(st, n) {
+    const c = st.cfg;
+    if (st.type === 'heats') {
+      if (c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än heatstorleken';
+      // Samma indelning som progress(): varje omgång före finalen måste slå ut någon
+      let m = n;
+      while (m > c.heatSize) {
+        const count = Math.ceil(m / c.heatSize);
+        const small = Math.floor(m / count), big = Math.ceil(m / count), bigCount = m - small * count;
+        const next = bigCount * Math.min(big, c.advancePerHeat) + (count - bigCount) * Math.min(small, c.advancePerHeat);
+        if (next >= m) return `Med ${m} deltagare blir heaten så små att ingen åker ut – sänk antal som går vidare eller höj heatstorleken`;
+        m = next;
+      }
+    }
+    if (st.type === 'double' && n < 3) return 'Dubbelutslagning kräver minst 3 deltagare';
+    if (st.type === 'swiss' && n < 4) return 'Swiss kräver minst 4 deltagare';
+    if ((st.type === 'gsl' || st.type === 'rr') && c.groups < 1) return 'Minst 1 grupp';
+    if (st.type === 'gsl' && Math.ceil(n / Math.max(1, Math.min(c.groups, Math.ceil(n / 2)))) > 4) {
+      return `GSL-grupper har plats för högst 4 – välj minst ${Math.ceil(n / 4)} grupper`;
+    }
+    return '';
+  }
+
   const api = {
     TYPES: TYPES,
     PRESETS: PRESETS,
@@ -839,6 +863,7 @@
     setLobbyResult: setLobbyResult,
     splitLobbies: splitLobbies,
     progress: progress,
+    startProblem: startProblem,
     isLocked: isLocked,
     winsNeeded: winsNeeded,
     parsePoints: parsePoints,
