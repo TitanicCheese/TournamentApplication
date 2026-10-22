@@ -93,7 +93,10 @@
 
   function normalizeDb(d) {
     if (!d || typeof d !== 'object' || !d.tournaments || typeof d.tournaments !== 'object') return null;
-    Object.values(d.tournaments).forEach(normalize);
+    Object.entries(d.tournaments).forEach(([id, t]) => {
+      t.id = id;
+      normalize(t);
+    });
     if (!Object.keys(d.tournaments).length) {
       const t = newTournament('Min turnering');
       d.tournaments[t.id] = t;
@@ -1915,7 +1918,8 @@
     }
     // Stöd både hela databasen och en enskild turnering
     if (data && Array.isArray(data.players) && !data.tournaments) {
-      data = { tournaments: { [data.id || L.uid()]: data }, activeId: data.id };
+      const id = data.id || L.uid();
+      data = { tournaments: { [id]: data }, activeId: id };
     }
     const incoming = normalizeDb(data);
     if (!incoming) {
