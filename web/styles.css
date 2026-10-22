@@ -13,27 +13,30 @@
   --border: rgba(19, 21, 43, .18);
   --hairline: rgba(19, 21, 43, .11);
 
-  --glass: rgba(250, 251, 255, .74);
-  --glass-strong: rgba(250, 251, 255, .92);
-  --glass-soft: rgba(250, 251, 255, .6);
+  --glass: rgba(248, 247, 255, .74);
+  --glass-strong: rgba(248, 247, 255, .92);
+  --glass-soft: rgba(248, 247, 255, .6);
   --glass-edge: rgba(255, 255, 255, .8);
   --glass-shadow: 0 18px 40px -24px rgba(28, 24, 80, .35), 0 1px 2px rgba(28, 24, 80, .06);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .9);
   --blur: blur(18px) saturate(120%);
 
   --surface: var(--glass);
-  --surface-2: rgba(250, 251, 255, .85);
+  --surface-2: rgba(248, 247, 255, .85);
 
   /* LAN-färger: violett för knappar, cyan för detaljer, magenta i övergångar */
   --ink: #5a3ff0;
   --ink-text: #ffffff;
   --primary: #5a3ff0;
-  --primary-grad: var(--ink);
+  --primary-grad: linear-gradient(135deg, var(--ink), var(--accent-2));
   --primary-text: var(--ink-text);
   --primary-soft: rgba(90, 63, 240, .12);
   --accent: #0a87a8;
   --accent-soft: rgba(10, 135, 168, .12);
   --accent-2: #d42a7c;
+  --glow-a: rgba(90, 63, 240, .16);
+  --glow-b: rgba(10, 170, 210, .14);
+  --glow-c: rgba(212, 42, 124, .1);
   --danger: #d23c3c;
   --success: #16a05a;
   --gold: #c9930e;
@@ -80,6 +83,9 @@
   --accent: #3fd9f2;
   --accent-soft: rgba(63, 217, 242, .14);
   --accent-2: #ff5fae;
+  --glow-a: rgba(143, 125, 255, .2);
+  --glow-b: rgba(63, 217, 242, .11);
+  --glow-c: rgba(255, 95, 174, .11);
   --danger: #ff6b6b;
   --success: #4ade80;
   --gold: #f6c445;
@@ -94,7 +100,15 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; overflow-x: hidden; }
-html { background: var(--bg); }
+/* Färgade sken i hörnen, som ljuset från skärmar i ett mörkt rum */
+html {
+  background:
+    radial-gradient(60vmax 50vmax at 0% 0%, var(--glow-a), transparent 70%),
+    radial-gradient(55vmax 45vmax at 100% 100%, var(--glow-b), transparent 70%),
+    radial-gradient(40vmax 35vmax at 100% 8%, var(--glow-c), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
 body {
   min-height: 100vh;
   background: transparent;
@@ -160,7 +174,7 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
 .top-actions { display: flex; gap: 4px; }
 .top-actions .icon-btn { color: var(--text); background: var(--glass-soft); border: 1px solid var(--border); }
 .timer-chip {
-  background: var(--ink); color: var(--ink-text); border: 0; border-radius: 999px;
+  background: var(--primary-grad); color: var(--ink-text); border: 0; border-radius: 999px;
   padding: 6px 12px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .timer-chip.done { background: var(--danger); color: #fff; animation: pulse 1.6s ease-in-out infinite; }
@@ -192,7 +206,7 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
 }
 .tabbar button svg { width: 23px; height: 23px; }
 .tabbar button:active { transform: scale(.92); }
-.tabbar button.active { color: var(--text); font-weight: 700; }
+.tabbar button.active { color: var(--primary); font-weight: 700; }
 /* Handritat streck under aktiv flik */
 .tabbar button.active::after {
   content: ""; position: absolute; left: 30%; right: 30%; bottom: 0; height: 5px;
@@ -231,7 +245,7 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
   font-weight: 600; transition: transform .15s, background-color .2s;
 }
 .btn svg { width: 20px; height: 20px; }
-.btn.primary { background: var(--ink); color: var(--ink-text); border-color: transparent; box-shadow: none; }
+.btn.primary { background: var(--primary-grad); color: var(--ink-text); border-color: transparent; box-shadow: none; }
 .btn.danger { background: var(--danger); color: #fff; border-color: transparent; box-shadow: none; }
 .btn.ghost { background: transparent; box-shadow: none; border-color: transparent; }
 .btn.danger-text { color: var(--danger); }
@@ -348,7 +362,7 @@ textarea { min-height: 140px; resize: vertical; }
   min-width: 38px; min-height: 30px; font-weight: 700; font-size: .85rem; color: var(--text);
 }
 .progress { height: 6px; border-radius: 3px; background: var(--hairline); overflow: hidden; margin-top: 10px; }
-.progress > div { height: 100%; border-radius: 3px; background: var(--ink); transition: width .5s var(--ease); }
+.progress > div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--ink)); transition: width .5s var(--ease); }
 
 /* ------------------------------------------------------------------ Tabell */
 .standings {
@@ -548,7 +562,7 @@ body.big .standings td { padding: 14px 12px; }
   border: 1.5px solid var(--accent); color: var(--accent); font-weight: 700;
 }
 .pill { font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
-.pill.live { background: var(--ink); color: var(--ink-text); }
+.pill.live { background: var(--primary-grad); color: var(--ink-text); }
 .pill.ready { background: color-mix(in srgb, var(--gold) 22%, transparent); color: color-mix(in srgb, var(--gold) 55%, var(--text)); }
 .pill.done { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
 .mlist-later { margin: 10px 4px 0; font-size: .85rem; color: var(--muted); }
