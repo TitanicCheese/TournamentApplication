@@ -1053,7 +1053,8 @@
   }
 
   function addRound(t) {
-    const n = t.rounds.length + 1;
+    let n = t.rounds.length + 1;
+    while (t.rounds.some((x) => x.name === 'Omgång ' + n)) n++;
     const r = { id: L.uid(), name: 'Omgång ' + n, scores: {} };
     t.rounds.push(r);
     ui.roundId = r.id;
