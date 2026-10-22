@@ -251,7 +251,10 @@
     const close = () => {
       if (closed) return;
       closed = true;
-      wrap.remove();
+      // Glid ut innan dialogen tas bort. Id:n tas bort direkt så att en ny dialog inte krockar.
+      wrap.classList.add('closing');
+      wrap.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+      setTimeout(() => wrap.remove(), 260);
       const i = modalStack.indexOf(close);
       if (i >= 0) modalStack.splice(i, 1);
       if (opts.onClose) opts.onClose();
