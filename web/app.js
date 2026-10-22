@@ -237,6 +237,26 @@
     toastTimer = setTimeout(() => (el.hidden = true), action ? 6000 : 2600);
   }
 
+  // Animerar höjden på el när innehållet (första barnet) byter storlek, t.ex. när ett fält visas
+  function smoothHeight(el) {
+    if (!window.ResizeObserver || !el.animate || !el.firstElementChild) return;
+    let last = 0;
+    new ResizeObserver(() => {
+      el.getAnimations().forEach((a) => a.cancel());
+      const h = el.getBoundingClientRect().height;
+      if (last && Math.abs(h - last) > 4 && !(reducedMotion && reducedMotion.matches)) {
+        el.animate([{ height: last + 'px', overflow: 'hidden' }, { height: h + 'px', overflow: 'hidden' }], { duration: 320, easing: 'cubic-bezier(.2, .7, .15, 1)' });
+      }
+      last = h;
+    }).observe(el.firstElementChild);
+  }
+
+  // Byter innehåll med en mjuk övergång där webbläsaren stödjer View Transitions
+  function smoothRender() {
+    if (document.startViewTransition && !(reducedMotion && reducedMotion.matches)) document.startViewTransition(render);
+    else render();
+  }
+
   const modalStack = [];
   function openModal(opts) {
     const wrap = document.createElement('div');
@@ -244,9 +264,10 @@
     wrap.innerHTML =
       `<div class="modal" role="dialog" aria-modal="true">` +
       `<div class="modal-head"><h2>${esc(opts.title)}</h2><button class="icon-btn" data-close aria-label="Stäng">${icon('close')}</button></div>` +
-      `<div class="modal-body">${opts.body || ''}</div>` +
+      `<div class="modal-body"><div>${opts.body || ''}</div></div>` +
       (opts.actions && opts.actions.length ? '<div class="modal-actions"></div>' : '') +
       `</div>`;
+    smoothHeight(wrap.querySelector('.modal-body'));
     let closed = false;
     const close = () => {
       if (closed) return;
@@ -558,9 +579,17 @@
     };
   }
 
+  // Spelare som redan visats i listan, så att bara nya tonas in
+  const shownPlayers = { tid: null, ids: new Set() };
+
   function fillPlayerList(t) {
+    if (shownPlayers.tid !== t.id) {
+      shownPlayers.tid = t.id;
+      shownPlayers.ids = new Set(t.players.map((p) => p.id));
+    }
     const ul = $('#playerList');
     if (!ul) return;
+    let fresh = 0;
     const q = ui.playerSearch.trim().toLowerCase();
     const list = t.players
       .map((p, i) => ({ p: p, i: i }))
@@ -573,7 +602,7 @@
       ? list
           .map(
             ({ p, i }) => `
-        <li class="${p.active === false ? 'inactive' : ''}">
+        <li class="${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
           <span class="num">${i + 1}</span>
           <div class="grow tap" data-action="edit" data-id="${p.id}">
             <div class="name">${esc(p.name)}</div>
@@ -585,6 +614,7 @@
           )
           .join('')
       : `<li class="muted">Inget matchar sökningen</li>`;
+    t.players.forEach((p) => shownPlayers.ids.add(p.id));
   }
 
   function bulkAddDialog(t) {
@@ -3972,13 +4002,13 @@
         const p = SG.PRESETS.find((x) => x.id === a.dataset.id);
         Object.assign(wz, { step: 2, preset: p, mode: p.mode || 'individual', roster: p.rosterSize || 5, game: p.game || 'none' });
         window.scrollTo(0, 0);
-        render();
+        smoothRender();
       } else if (act === 'back') {
         wz.step = 1;
-        render();
+        smoothRender();
       } else if (act === 'mode') {
         wz.mode = a.dataset.v;
-        render();
+        smoothRender();
       } else if (act === 'create') createFromWizard();
     };
     view.oninput = (e) => {

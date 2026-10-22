@@ -295,6 +295,8 @@ textarea { min-height: 140px; resize: vertical; }
 .list li.tap { cursor: pointer; }
 .list li.tap:active { background: var(--primary-soft); }
 .list li.current { background: var(--primary-soft); }
+/* Nya spelare tonas in, lite förskjutet vid flera på en gång */
+.list li.new { animation: rise .7s var(--ease) both; animation-delay: calc(var(--n, 0) * 45ms); }
 
 .empty {
   text-align: center; padding: 40px 18px; color: var(--muted);
@@ -698,6 +700,9 @@ details.cfg[open]::details-content { block-size: auto; }
 #sbBody.dragging .sb-drop, #sbBody.dragging { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 18px; }
 
 /* ------------------------------------------------- Guide: ny turnering */
+/* Formuläret i steg 2 byter storlek mjukt när ett fält visas eller döljs */
+.wizard-head + .card { view-transition-name: wizard-form; }
+::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: .4s; animation-timing-function: cubic-bezier(.2, .7, .15, 1); }
 body.wizard .tabbar { display: none; }
 body.wizard { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
 .wizard-head { text-align: center; margin: 14px 6px 22px; }
