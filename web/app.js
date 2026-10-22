@@ -120,9 +120,22 @@
   let db = load();
   const T = () => db.tournaments[db.activeId];
 
+  // Ber webbläsaren att inte rensa sparad data på egen hand (t.ex. när lagringen blir full
+  // eller i Safari efter en tids inaktivitet). Firefox frågar användaren, så det görs bara
+  // när det finns riktiga turneringar att skydda.
+  let persistAsked = false;
+  function keepDataSafe() {
+    if (persistAsked || !navigator.storage || !navigator.storage.persist) return;
+    if (!Object.values(db.tournaments).some((x) => x.players.length)) return;
+    persistAsked = true;
+    navigator.storage.persist().catch(() => {});
+  }
+  keepDataSafe();
+
   function save() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      keepDataSafe();
     } catch (e) {
       toast('Kunde inte spara: ' + e.message);
     }
