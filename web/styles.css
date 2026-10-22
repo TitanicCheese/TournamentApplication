@@ -543,7 +543,16 @@ body.big .standings td { padding: 14px 12px; }
 .pill.live { background: var(--ink); color: var(--ink-text); }
 .pill.ready { background: color-mix(in srgb, var(--gold) 22%, transparent); color: color-mix(in srgb, var(--gold) 55%, var(--text)); }
 .pill.done { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
-.stage-card .icon-btn[disabled] { opacity: .3; }
+.stage-card > .row:first-child .icon-btn { margin: -8px -8px -8px -2px; }
+
+/* Menyer i dialoger (turneringar, faser) */
+.modal .list li > svg { color: var(--muted); }
+.list li.danger-row, .modal .list li.danger-row > svg { color: var(--danger); }
+.t-list .t-mark { display: inline-flex; width: 20px; flex: none; color: var(--text); }
+.t-list .t-mark svg { width: 20px; height: 20px; }
+.t-list li { padding-left: 12px; }
+.t-list li.current { background: none; }
+.t-list li.current .name { font-weight: 700; }
 
 details.cfg { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
 details.cfg > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; list-style: none; }
@@ -764,6 +773,9 @@ body.wizard { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
   .btn.primary:hover:not(:disabled) { background-color: var(--ink); opacity: .88; }
   .list li.tap:hover, .standings tr.tap:hover td { background: var(--primary-soft); }
 }
+/* När en dialog är öppen visas meddelanden överst så att de inte täcker dialogen */
+body:has(.modal-backdrop:not(.closing)) .toast { bottom: auto; top: calc(env(safe-area-inset-top) + 16px); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01s !important; animation-delay: 0s !important; transition: none !important; }
 }

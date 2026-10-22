@@ -30,6 +30,8 @@
     upload: 'M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z',
     add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
     crown: 'M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z',
+    more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+    check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   };
   const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
 
@@ -1660,29 +1662,8 @@
   /* ------------------------------- Mer ------------------------------ */
 
   function renderMore(view, t) {
-    const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt);
     view.innerHTML = `
-      <div class="section-title">Turneringar</div>
-      <ul class="list">
-        ${list
-          .map(
-            (x) => `
-          <li class="tap ${x.id === db.activeId ? 'current' : ''}" data-action="switch" data-id="${x.id}">
-            <div class="grow"><div class="name">${esc(x.name)}</div>
-            <div class="sub">${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}${x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`}</div></div>
-            ${x.id === db.activeId ? '<span class="pill live">Aktiv</span>' : ''}
-          </li>`
-          )
-          .join('')}
-      </ul>
-      <div class="row wrap" style="margin-top:10px">
-        <button class="btn small primary" data-action="newT">${icon('add')}Ny turnering</button>
-        <button class="btn small" data-action="renameT">Byt namn</button>
-        <button class="btn small" data-action="copyT">Kopiera ${W(t).one} till ny</button>
-        <button class="btn small danger-text" data-action="deleteT">Ta bort</button>
-      </div>
-
-      <div class="section-title">Typ av turnering (${esc(t.name)})</div>
+      <div class="section-title">Typ av turnering</div>
       <section class="card">
         <div class="seg" style="margin-bottom:8px">
           <button data-action="mode" data-v="individual" class="${!isTeamMode(t) ? 'on' : ''}">Individuell</button>
@@ -1742,18 +1723,6 @@
       const a = e.target.closest('[data-action]');
       if (!a) return;
       switch (a.dataset.action) {
-        case 'switch':
-          if (a.dataset.id !== db.activeId) {
-            db.activeId = a.dataset.id;
-            ui.roundId = null;
-            ui.stageIdx = null;
-            poDraft = null;
-            commit(`Bytte till ${T().name}`);
-          }
-          break;
-        case 'newT':
-          newTournamentDialog();
-          break;
         case 'clearKey':
           try {
             localStorage.removeItem(KEY_STORE);
@@ -1781,46 +1750,6 @@
             poDraft = null;
             commit(isTeamMode(t) ? 'Nu är det en lagturnering' : 'Nu är det en individuell turnering');
           }
-          break;
-        case 'renameT':
-          promptDialog('Byt namn på turnering', 'Namn', t.name, (v) => {
-            t.name = v;
-            commit('Sparat');
-          });
-          break;
-        case 'copyT':
-          promptDialog(`Ny turnering med samma ${W(t).one}`, 'Namn', t.name + ' (2)', (v) => {
-            const nt = newTournament(v, t.mode);
-            nt.players = t.players.map((p) => {
-              const c = { id: L.uid(), name: p.name, active: true };
-              if (p.teamId) c.teamId = p.teamId;
-              if (p.members) c.members = p.members.slice();
-              return c;
-            });
-            nt.teams = t.teams.map((x) => Object.assign({}, x));
-            nt.settings = Object.assign({}, t.settings);
-            nt.format = t.format;
-            nt.presetId = t.presetId;
-            nt.stages = t.stages.map((s) => {
-              const c = SG.newStage(s.type, s.name);
-              c.cfg = Object.assign({}, s.cfg);
-              return c;
-            });
-            db.tournaments[nt.id] = nt;
-            db.activeId = nt.id;
-            ui.roundId = null;
-            poDraft = null;
-            commit(`${v} skapad med ${nt.players.length} ${W(nt).one}`);
-          });
-          break;
-        case 'deleteT':
-          confirmDialog('Ta bort turnering?', `"${t.name}" med alla spelare, poäng och slutspel tas bort.`, 'Ta bort', () => {
-            checkpoint();
-            delete db.tournaments[t.id];
-            normalizeDb(db);
-            ui.roundId = null;
-            commit(`${t.name} borttagen`, true);
-          });
           break;
         case 'timer':
           timerDialog();
@@ -1899,6 +1828,109 @@
 
   function newTournamentDialog() {
     startWizard();
+  }
+
+  const tournamentSub = (x) =>
+    `${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}` +
+    (x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`);
+
+  function switchTournament(id) {
+    if (id === db.activeId) return;
+    db.activeId = id;
+    ui.roundId = null;
+    ui.stageIdx = null;
+    poDraft = null;
+    commit(`Bytte till ${T().name}`);
+  }
+
+  /** Turneringslistan bakom titeln: tryck för att byta, ⋯ för att döpa om, kopiera eller ta bort. */
+  function tournamentSheet() {
+    const sheet = openModal({
+      title: 'Turneringar',
+      body: '<ul class="list t-list" id="tList"></ul>',
+      actions: [{ label: 'Ny turnering', cls: 'primary block', onClick: () => startWizard() }],
+    });
+    const draw = () => {
+      const el = $('.t-list', sheet.el);
+      if (!el) return;
+      el.innerHTML = Object.values(db.tournaments)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(
+          (x) => `<li class="tap ${x.id === db.activeId ? 'current' : ''}" data-tid="${x.id}">
+            <span class="t-mark">${x.id === db.activeId ? icon('check') : ''}</span>
+            <div class="grow"><div class="name">${esc(x.name)}</div><div class="sub">${tournamentSub(x)}</div></div>
+            <button class="icon-btn" data-tmenu="${x.id}" aria-label="Fler val för ${esc(x.name)}">${icon('more')}</button>
+          </li>`
+        )
+        .join('');
+    };
+    draw();
+    sheet.el.addEventListener('click', (e) => {
+      const menu = e.target.closest('[data-tmenu]');
+      if (menu) return tournamentMenu(db.tournaments[menu.dataset.tmenu], draw);
+      const row = e.target.closest('[data-tid]');
+      if (!row) return;
+      switchTournament(row.dataset.tid);
+      sheet.close();
+    });
+  }
+
+  /** Val för en turnering i listan. redraw ritar om listan efter en ändring. */
+  function tournamentMenu(x, redraw) {
+    const m = openModal({
+      title: x.name,
+      body: `<ul class="list">
+        <li class="tap" data-m="rename">${icon('edit')}<div class="grow"><div class="name">Byt namn</div></div></li>
+        <li class="tap" data-m="copy">${icon('people')}<div class="grow"><div class="name">Kopiera till ny turnering</div><div class="sub">Samma ${W(x).one}, format och inställningar</div></div></li>
+        <li class="tap danger-row" data-m="delete">${icon('del')}<div class="grow"><div class="name">Ta bort</div></div></li>
+      </ul>`,
+    });
+    m.el.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-m]');
+      if (!row) return;
+      m.close();
+      if (row.dataset.m === 'rename') {
+        promptDialog('Byt namn på turnering', 'Namn', x.name, (v) => {
+          x.name = v;
+          commit('Sparat');
+          redraw();
+        });
+      } else if (row.dataset.m === 'copy') {
+        promptDialog(`Ny turnering med samma ${W(x).one}`, 'Namn', x.name + ' (2)', (v) => {
+          const nt = newTournament(v, x.mode);
+          nt.players = x.players.map((p) => {
+            const c = { id: L.uid(), name: p.name, active: true };
+            if (p.teamId) c.teamId = p.teamId;
+            if (p.members) c.members = p.members.slice();
+            return c;
+          });
+          nt.teams = x.teams.map((tm) => Object.assign({}, tm));
+          nt.settings = Object.assign({}, x.settings);
+          nt.format = x.format;
+          nt.presetId = x.presetId;
+          nt.stages = x.stages.map((st) => {
+            const c = SG.newStage(st.type, st.name);
+            c.cfg = Object.assign({}, st.cfg);
+            return c;
+          });
+          db.tournaments[nt.id] = nt;
+          db.activeId = nt.id;
+          ui.roundId = null;
+          poDraft = null;
+          commit(`${v} skapad med ${nt.players.length} ${W(nt).one}`);
+          redraw();
+        });
+      } else {
+        confirmDialog('Ta bort turnering?', `"${x.name}" med alla ${W(x).one}, poäng och slutspel tas bort.`, 'Ta bort', () => {
+          checkpoint();
+          delete db.tournaments[x.id];
+          normalizeDb(db);
+          ui.roundId = null;
+          commit(`${x.name} borttagen`, true);
+          redraw();
+        });
+      }
+    });
   }
 
   function dateStamp() {
@@ -4075,7 +4107,7 @@
     if (b) setTab(b.dataset.tab);
   });
   $('#tournamentBtn').addEventListener('click', () => {
-    if (!ui.wizard) setTab('more');
+    if (!ui.wizard) tournamentSheet();
   });
   $('#timerChip').addEventListener('click', timerDialog);
 
