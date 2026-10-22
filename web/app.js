@@ -1617,7 +1617,7 @@
           <li class="tap ${x.id === db.activeId ? 'current' : ''}" data-action="switch" data-id="${x.id}">
             <div class="grow"><div class="name">${esc(x.name)}</div>
             <div class="sub">${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}${x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`}</div></div>
-            ${x.id === db.activeId ? '<span class="small" style="color:var(--primary);font-weight:700">AKTIV</span>' : ''}
+            ${x.id === db.activeId ? '<span class="pill live">Aktiv</span>' : ''}
           </li>`
           )
           .join('')}
