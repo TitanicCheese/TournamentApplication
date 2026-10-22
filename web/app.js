@@ -1869,7 +1869,7 @@
     draw();
     sheet.el.addEventListener('click', (e) => {
       const menu = e.target.closest('[data-tmenu]');
-      if (menu) return tournamentMenu(db.tournaments[menu.dataset.tmenu], draw);
+      if (menu) return tournamentMenu(db.tournaments[menu.dataset.tmenu], draw, sheet.close);
       const row = e.target.closest('[data-tid]');
       if (!row) return;
       switchTournament(row.dataset.tid);
@@ -1877,8 +1877,11 @@
     });
   }
 
-  /** Val för en turnering i listan. redraw ritar om listan efter en ändring. */
-  function tournamentMenu(x, redraw) {
+  /**
+   * Val för en turnering i listan. redraw ritar om listan efter en ändring.
+   * closeSheet stänger listan; det görs vid borttagning så att Ångra inte lämnar en inaktuell lista.
+   */
+  function tournamentMenu(x, redraw, closeSheet) {
     const m = openModal({
       title: x.name,
       body: `<ul class="list">
@@ -1925,11 +1928,12 @@
       } else {
         confirmDialog('Ta bort turnering?', `"${x.name}" med alla ${W(x).one}, poäng och slutspel tas bort.`, 'Ta bort', () => {
           checkpoint();
+          const wasActive = x.id === db.activeId;
           delete db.tournaments[x.id];
           normalizeDb(db);
-          ui.roundId = null;
+          if (wasActive) ui.roundId = null;
+          closeSheet();
           commit(`${x.name} borttagen`, true);
-          redraw();
         });
       }
     });
