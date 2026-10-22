@@ -3,15 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#eef0ff">
+  <meta name="theme-color" content="#ebe6de">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Turnering</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="scene" aria-hidden="true">
+    <svg class="window" viewBox="0 0 200 400" preserveAspectRatio="none"><path d="M16 104A84 84 0 0 1 93 17V150H16ZM107 17A84 84 0 0 1 184 104V150H107ZM16 164H93V384H16ZM107 164H184V384H107Z"/></svg>
+    <div class="grain"></div>
+  </div>
   <header class="topbar">
     <button id="tournamentBtn" class="title-btn" aria-label="Byt turnering">
       <span id="tName">Turnering</span>

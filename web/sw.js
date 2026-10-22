@@ -1,6 +1,6 @@
 // Offline-stöd när appen körs som webbapp (PWA)
-const CACHE = 'turnering-v6';
-const FILES = ['./', './index.html', './styles.css', './logic.js', './stages.js', './stats.js', './vendor/anthropic-sdk.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'turnering-v7';
+const FILES = ['./', './index.html', './styles.css', './logic.js', './stages.js', './stats.js', './vendor/anthropic-sdk.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './fonts/fraunces.woff2', './fonts/caveat.woff2'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

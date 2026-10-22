@@ -412,7 +412,7 @@
     const dark = pref === 'dark' || (pref === 'auto' && media && media.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const meta = $('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? '#0b0b1d' : '#eef0ff';
+    if (meta) meta.content = dark ? '#141311' : '#ebe6de';
   }
   if (media && media.addEventListener) media.addEventListener('change', applyTheme);
 
@@ -421,6 +421,14 @@
     saveUi();
     render();
     window.scrollTo(0, 0);
+    fadeIn($('#view'));
+  }
+
+  // Mjuk intoning av en vy vid flikbyte (hoppas över vid reducerad rörelse)
+  const reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function fadeIn(el) {
+    if (!el || !el.animate || (reducedMotion && reducedMotion.matches)) return;
+    el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, easing: 'cubic-bezier(.2, .7, .15, 1)' });
   }
 
   function render() {
