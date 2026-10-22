@@ -7,38 +7,38 @@
 @font-face { font-family: "Caveat"; src: url(fonts/caveat.woff2) format("woff2"); font-weight: 400 700; font-display: swap; }
 
 :root {
-  --bg: #ebe6de;
-  --text: #191714;
-  --muted: #57514a;
-  --border: rgba(29, 27, 24, .2);
-  --hairline: rgba(29, 27, 24, .13);
+  --bg: #ece4d6;
+  --text: #122a2e;
+  --muted: #4f5d5f;
+  --border: rgba(20, 42, 47, .2);
+  --hairline: rgba(20, 42, 47, .13);
 
-  --glass: rgba(255, 253, 249, .74);
-  --glass-strong: rgba(255, 253, 249, .92);
-  --glass-soft: rgba(255, 253, 249, .6);
+  --glass: rgba(255, 251, 244, .74);
+  --glass-strong: rgba(255, 251, 244, .92);
+  --glass-soft: rgba(255, 251, 244, .6);
   --glass-edge: rgba(255, 255, 255, .8);
-  --glass-shadow: 0 18px 40px -24px rgba(40, 32, 22, .4), 0 1px 2px rgba(40, 32, 22, .06);
+  --glass-shadow: 0 18px 40px -24px rgba(20, 42, 47, .4), 0 1px 2px rgba(20, 42, 47, .06);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .9);
   --blur: blur(18px) saturate(120%);
 
   --surface: var(--glass);
-  --surface-2: rgba(255, 253, 249, .85);
+  --surface-2: rgba(255, 251, 244, .85);
 
   /* --ink är knappfärgen, --primary är den dämpade accenten */
-  --ink: #1d1b18;
-  --ink-text: #f6f2ea;
-  --primary: #5e4f3c;
+  --ink: #1c4b55;
+  --ink-text: #f7f1e6;
+  --primary: #23646f;
   --primary-grad: var(--ink);
   --primary-text: var(--ink-text);
-  --primary-soft: rgba(94, 79, 60, .13);
+  --primary-soft: rgba(35, 100, 111, .13);
   --danger: #a3402e;
   --success: #5d7a4e;
   --gold: #b08a3e;
   --silver: #9a958c;
   --bronze: #9c6a45;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%2357514a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%231d1b18' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%234f5d5f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%231c4b55' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #ffffff;
   --window: .7;
   --grain: .28;
@@ -56,30 +56,30 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --bg: #141311;
-  --text: #f3eee6;
-  --muted: #bdb4a6;
-  --border: rgba(236, 231, 223, .2);
-  --hairline: rgba(236, 231, 223, .12);
+  --bg: #0f1b1d;
+  --text: #f2ebdf;
+  --muted: #b4bcb6;
+  --border: rgba(242, 235, 223, .2);
+  --hairline: rgba(242, 235, 223, .12);
 
-  --glass: rgba(38, 36, 32, .78);
-  --glass-strong: rgba(32, 30, 27, .92);
+  --glass: rgba(24, 40, 43, .78);
+  --glass-strong: rgba(20, 34, 37, .92);
   --glass-soft: rgba(255, 255, 255, .07);
   --glass-edge: rgba(255, 255, 255, .1);
   --glass-shadow: 0 18px 40px -20px rgba(0, 0, 0, .8);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .08);
 
   --surface-2: rgba(255, 255, 255, .07);
-  --ink: #ece7df;
-  --ink-text: #141311;
-  --primary: #d6c4a6;
-  --primary-soft: rgba(201, 182, 153, .15);
+  --ink: #86c5c3;
+  --ink-text: #0f1b1d;
+  --primary: #8fcfcc;
+  --primary-soft: rgba(134, 197, 195, .15);
   --danger: #d9826f;
   --success: #9fb98d;
   --gold: #d6b26a;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23bdb4a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%23ece7df' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23b4bcb6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%2386c5c3' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #fff6e6;
   --window: .06;
   --grain: .22;
@@ -437,7 +437,7 @@ body.big .standings td { padding: 14px 12px; }
 /* ------------------------------------------------------------------ Dialoger */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(20, 18, 15, .3);
+  background: rgba(12, 30, 34, .3);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   display: flex; align-items: flex-end; justify-content: center; animation: fade .35s;
 }
@@ -445,7 +445,7 @@ body.big .standings td { padding: 14px 12px; }
   width: calc(100% - 16px); max-width: 560px; max-height: 90vh; margin-bottom: 8px;
   background: var(--glass-strong);
   border: 1px solid var(--glass-edge); border-radius: 30px 26px 32px 24px / 26px 32px 24px 30px;
-  box-shadow: var(--glass-shine), 0 30px 60px -20px rgba(20, 16, 10, .45);
+  box-shadow: var(--glass-shine), 0 30px 60px -20px rgba(10, 24, 28, .45);
   display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom); animation: up .45s var(--ease);
 }
@@ -469,7 +469,7 @@ body.big .standings td { padding: 14px 12px; }
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 60;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 26px);
   width: max-content; max-width: min(520px, calc(100vw - 32px));
-  background: rgba(29, 27, 24, .86); color: #f6f2ea;
+  background: rgba(20, 42, 47, .9); color: #f7f1e6;
   border: 1px solid rgba(255, 255, 255, .12); border-radius: 22px; padding: 10px 18px;
   display: flex; gap: 14px; align-items: center;
   box-shadow: 0 14px 30px -12px rgba(0, 0, 0, .4);
@@ -478,7 +478,7 @@ body.big .standings td { padding: 14px 12px; }
 }
 @starting-style { .toast { opacity: 0; translate: 0 10px; } }
 .toast[hidden] { display: none; opacity: 0; translate: 0 10px; }
-.toast button { background: none; border: 0; color: #e3d5bd; font-weight: 700; font-size: .9rem; }
+.toast button { background: none; border: 0; color: #ead9b8; font-weight: 700; font-size: .9rem; }
 
 /* ------------------------------------------------------------------ Verktyg */
 .timer-display {
