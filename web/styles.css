@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Frostat glas i LAN-färger: violett, cyan och magenta på kall grå eller nattsvart.
+   Frostat glas i LAN-färger: violett, cyan och en orange fade på kall grå eller nattsvart.
    Samma former som donsokallarn.se. Typsnitt: Atkinson Hyperlegible Next, Fraunces och Caveat (SIL OFL).
    ========================================================================== */
 @font-face { font-family: "Atkinson Hyperlegible Next"; src: url(fonts/atkinson.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
@@ -13,30 +13,32 @@
   --border: rgba(19, 21, 43, .18);
   --hairline: rgba(19, 21, 43, .11);
 
-  --glass: rgba(248, 247, 255, .74);
-  --glass-strong: rgba(248, 247, 255, .92);
-  --glass-soft: rgba(248, 247, 255, .6);
+  --glass: rgba(255, 250, 245, .74);
+  --glass-strong: rgba(255, 250, 245, .92);
+  --glass-soft: rgba(255, 250, 245, .6);
   --glass-edge: rgba(255, 255, 255, .8);
   --glass-shadow: 0 18px 40px -24px rgba(28, 24, 80, .35), 0 1px 2px rgba(28, 24, 80, .06);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .9);
   --blur: blur(18px) saturate(120%);
 
   --surface: var(--glass);
-  --surface-2: rgba(248, 247, 255, .85);
+  --surface-2: rgba(255, 250, 245, .85);
 
-  /* LAN-färger: violett för knappar, cyan för detaljer, magenta i övergångar */
+  /* LAN-färger: violett och cyan, och en orange fade för knappar, sken och aktiv flik */
   --ink: #5a3ff0;
   --ink-text: #ffffff;
   --primary: #5a3ff0;
-  --primary-grad: linear-gradient(135deg, var(--ink), var(--accent-2));
+  --primary-grad: linear-gradient(135deg, var(--orange-a), var(--orange-b));
   --primary-text: var(--ink-text);
   --primary-soft: rgba(90, 63, 240, .12);
   --accent: #0a87a8;
   --accent-soft: rgba(10, 135, 168, .12);
-  --accent-2: #d42a7c;
-  --glow-a: rgba(90, 63, 240, .16);
-  --glow-b: rgba(10, 170, 210, .14);
-  --glow-c: rgba(212, 42, 124, .1);
+  --orange-a: #ec7a12;
+  --orange-b: #c2410c;
+  --orange-text: #b8430c;
+  --glow-a: rgba(255, 140, 40, .16);
+  --glow-b: rgba(255, 195, 100, .16);
+  --glow-c: rgba(230, 80, 20, .1);
   --danger: #d23c3c;
   --success: #16a05a;
   --gold: #c9930e;
@@ -82,17 +84,19 @@
   --primary-soft: rgba(143, 125, 255, .16);
   --accent: #3fd9f2;
   --accent-soft: rgba(63, 217, 242, .14);
-  --accent-2: #ff5fae;
-  --glow-a: rgba(143, 125, 255, .2);
-  --glow-b: rgba(63, 217, 242, .11);
-  --glow-c: rgba(255, 95, 174, .11);
+  --orange-a: #ffb54d;
+  --orange-b: #ff7a1f;
+  --orange-text: #ffa04a;
+  --glow-a: rgba(255, 140, 40, .15);
+  --glow-b: rgba(255, 185, 90, .08);
+  --glow-c: rgba(255, 90, 30, .1);
   --danger: #ff6b6b;
   --success: #4ade80;
   --gold: #f6c445;
 
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23a0a6c4' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%238f7dff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --light: #7d6bff;
+  --light: #ff9a3d;
   --window: .1;
   --grain: .15;
   color-scheme: dark;
@@ -206,11 +210,11 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
 }
 .tabbar button svg { width: 23px; height: 23px; }
 .tabbar button:active { transform: scale(.92); }
-.tabbar button.active { color: var(--primary); font-weight: 700; }
+.tabbar button.active { color: var(--orange-text); font-weight: 700; }
 /* Handritat streck under aktiv flik */
 .tabbar button.active::after {
   content: ""; position: absolute; left: 30%; right: 30%; bottom: 0; height: 5px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--orange-a), var(--orange-b));
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 5' preserveAspectRatio='none'%3E%3Cpath d='M1.5 3.2C10 1.6 24 1.4 38.5 2.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 5' preserveAspectRatio='none'%3E%3Cpath d='M1.5 3.2C10 1.6 24 1.4 38.5 2.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   animation: pen .5s var(--ease);
@@ -362,7 +366,7 @@ textarea { min-height: 140px; resize: vertical; }
   min-width: 38px; min-height: 30px; font-weight: 700; font-size: .85rem; color: var(--text);
 }
 .progress { height: 6px; border-radius: 3px; background: var(--hairline); overflow: hidden; margin-top: 10px; }
-.progress > div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--ink)); transition: width .5s var(--ease); }
+.progress > div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--orange-a), var(--orange-b)); transition: width .5s var(--ease); }
 
 /* ------------------------------------------------------------------ Tabell */
 .standings {
