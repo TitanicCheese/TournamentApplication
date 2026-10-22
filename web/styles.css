@@ -1,49 +1,50 @@
 /* ==========================================================================
-   Frostat glas på linne, bläck och ljuset från ett kyrkfönster.
-   Samma utseende som donsokallarn.se. Typsnitt: Atkinson Hyperlegible Next, Fraunces och Caveat (SIL OFL).
+   Frostat glas i LAN-färger: violett, cyan och magenta på kall grå eller nattsvart.
+   Samma former som donsokallarn.se. Typsnitt: Atkinson Hyperlegible Next, Fraunces och Caveat (SIL OFL).
    ========================================================================== */
 @font-face { font-family: "Atkinson Hyperlegible Next"; src: url(fonts/atkinson.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
 @font-face { font-family: "Fraunces"; src: url(fonts/fraunces.woff2) format("woff2"); font-weight: 300 900; font-display: swap; }
 @font-face { font-family: "Caveat"; src: url(fonts/caveat.woff2) format("woff2"); font-weight: 400 700; font-display: swap; }
 
 :root {
-  --bg: #ece4d6;
-  --text: #122a2e;
-  --muted: #4f5d5f;
-  --border: rgba(20, 42, 47, .2);
-  --hairline: rgba(20, 42, 47, .13);
+  --bg: #e9ebf3;
+  --text: #13152b;
+  --muted: #4c5170;
+  --border: rgba(19, 21, 43, .18);
+  --hairline: rgba(19, 21, 43, .11);
 
-  --glass: rgba(255, 251, 244, .74);
-  --glass-strong: rgba(255, 251, 244, .92);
-  --glass-soft: rgba(255, 251, 244, .6);
+  --glass: rgba(250, 251, 255, .74);
+  --glass-strong: rgba(250, 251, 255, .92);
+  --glass-soft: rgba(250, 251, 255, .6);
   --glass-edge: rgba(255, 255, 255, .8);
-  --glass-shadow: 0 18px 40px -24px rgba(20, 42, 47, .4), 0 1px 2px rgba(20, 42, 47, .06);
+  --glass-shadow: 0 18px 40px -24px rgba(28, 24, 80, .35), 0 1px 2px rgba(28, 24, 80, .06);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .9);
   --blur: blur(18px) saturate(120%);
 
   --surface: var(--glass);
-  --surface-2: rgba(255, 251, 244, .85);
+  --surface-2: rgba(250, 251, 255, .85);
 
-  /* --ink är knappfärgen, --primary är den dämpade accenten */
-  --ink: #1c4b55;
-  --ink-text: #f7f1e6;
-  --primary: #23646f;
+  /* LAN-färger: violett för knappar, cyan för detaljer, magenta i övergångar */
+  --ink: #5a3ff0;
+  --ink-text: #ffffff;
+  --primary: #5a3ff0;
   --primary-grad: var(--ink);
   --primary-text: var(--ink-text);
-  --primary-soft: rgba(35, 100, 111, .13);
-  --accent: #a8466e;
-  --accent-soft: rgba(168, 70, 110, .12);
-  --danger: #a3402e;
-  --success: #5d7a4e;
-  --gold: #b08a3e;
-  --silver: #9a958c;
-  --bronze: #9c6a45;
+  --primary-soft: rgba(90, 63, 240, .12);
+  --accent: #0a87a8;
+  --accent-soft: rgba(10, 135, 168, .12);
+  --accent-2: #d42a7c;
+  --danger: #d23c3c;
+  --success: #16a05a;
+  --gold: #c9930e;
+  --silver: #8e93a8;
+  --bronze: #b06a3a;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%234f5d5f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%231c4b55' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%234c5170' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%235a3ff0' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #ffffff;
   --window: .7;
-  --grain: .28;
+  --grain: .18;
 
   --sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
@@ -58,35 +59,36 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --bg: #0f1b1d;
-  --text: #f2ebdf;
-  --muted: #b4bcb6;
-  --border: rgba(242, 235, 223, .2);
-  --hairline: rgba(242, 235, 223, .12);
+  --bg: #0b0d18;
+  --text: #eceefa;
+  --muted: #a0a6c4;
+  --border: rgba(236, 238, 250, .16);
+  --hairline: rgba(236, 238, 250, .1);
 
-  --glass: rgba(24, 40, 43, .78);
-  --glass-strong: rgba(20, 34, 37, .92);
-  --glass-soft: rgba(255, 255, 255, .07);
-  --glass-edge: rgba(255, 255, 255, .1);
+  --glass: rgba(22, 25, 44, .78);
+  --glass-strong: rgba(17, 19, 34, .92);
+  --glass-soft: rgba(255, 255, 255, .06);
+  --glass-edge: rgba(255, 255, 255, .09);
   --glass-shadow: 0 18px 40px -20px rgba(0, 0, 0, .8);
-  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .08);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .07);
 
-  --surface-2: rgba(255, 255, 255, .07);
-  --ink: #86c5c3;
-  --ink-text: #0f1b1d;
-  --primary: #8fcfcc;
-  --primary-soft: rgba(134, 197, 195, .15);
-  --accent: #f0a0be;
-  --accent-soft: rgba(240, 160, 190, .15);
-  --danger: #d9826f;
-  --success: #9fb98d;
-  --gold: #d6b26a;
+  --surface-2: rgba(255, 255, 255, .06);
+  --ink: #8f7dff;
+  --ink-text: #0b0d18;
+  --primary: #a596ff;
+  --primary-soft: rgba(143, 125, 255, .16);
+  --accent: #3fd9f2;
+  --accent-soft: rgba(63, 217, 242, .14);
+  --accent-2: #ff5fae;
+  --danger: #ff6b6b;
+  --success: #4ade80;
+  --gold: #f6c445;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23b4bcb6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%2386c5c3' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --light: #fff6e6;
-  --window: .06;
-  --grain: .22;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23a0a6c4' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%238f7dff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --light: #7d6bff;
+  --window: .1;
+  --grain: .15;
   color-scheme: dark;
 }
 
@@ -194,7 +196,7 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
 /* Handritat streck under aktiv flik */
 .tabbar button.active::after {
   content: ""; position: absolute; left: 30%; right: 30%; bottom: 0; height: 5px;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 5' preserveAspectRatio='none'%3E%3Cpath d='M1.5 3.2C10 1.6 24 1.4 38.5 2.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 5' preserveAspectRatio='none'%3E%3Cpath d='M1.5 3.2C10 1.6 24 1.4 38.5 2.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   animation: pen .5s var(--ease);
@@ -442,7 +444,7 @@ body.big .standings td { padding: 14px 12px; }
 /* ------------------------------------------------------------------ Dialoger */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(12, 30, 34, .3);
+  background: rgba(10, 12, 30, .35);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   display: flex; align-items: flex-end; justify-content: center; animation: fade .35s;
 }
@@ -450,7 +452,7 @@ body.big .standings td { padding: 14px 12px; }
   width: calc(100% - 16px); max-width: 560px; max-height: 90vh; margin-bottom: 8px;
   background: var(--glass-strong);
   border: 1px solid var(--glass-edge); border-radius: 30px 26px 32px 24px / 26px 32px 24px 30px;
-  box-shadow: var(--glass-shine), 0 30px 60px -20px rgba(10, 24, 28, .45);
+  box-shadow: var(--glass-shine), 0 30px 60px -20px rgba(10, 10, 40, .45);
   display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom); animation: up .45s var(--ease);
 }
@@ -474,7 +476,7 @@ body.big .standings td { padding: 14px 12px; }
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 60;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 26px);
   width: max-content; max-width: min(520px, calc(100vw - 32px));
-  background: rgba(20, 42, 47, .9); color: #f7f1e6;
+  background: rgba(19, 21, 43, .92); color: #ffffff;
   border: 1px solid rgba(255, 255, 255, .12); border-radius: 22px; padding: 10px 18px;
   display: flex; gap: 14px; align-items: center;
   box-shadow: 0 14px 30px -12px rgba(0, 0, 0, .4);
@@ -483,7 +485,7 @@ body.big .standings td { padding: 14px 12px; }
 }
 @starting-style { .toast { opacity: 0; translate: 0 10px; } }
 .toast[hidden] { display: none; opacity: 0; translate: 0 10px; }
-.toast button { background: none; border: 0; color: #ead9b8; font-weight: 700; font-size: .9rem; }
+.toast button { background: none; border: 0; color: #3fd9f2; font-weight: 700; font-size: .9rem; }
 
 /* ------------------------------------------------------------------ Verktyg */
 .timer-display {
