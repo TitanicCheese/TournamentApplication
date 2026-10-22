@@ -216,7 +216,7 @@
   }
 
   /**
-   * Instruktion till Claude. teams: [{name, members: [string]}] – de lag som
+   * Instruktion till AI-modellen. teams: [{name, members: [string]}] – de lag som
    * kan finnas på bilden (t.ex. de två lagen i matchen).
    */
   function scoreboardPrompt(game, teams, asJsonText) {
@@ -243,7 +243,7 @@
   }
 
   /**
-   * Gör om Claudes svar till kartdata. participants: [{id, name, members}]
+   * Gör om AI-modellens svar till kartdata. participants: [{id, name, members}]
    * – de lag som svaret ska kopplas till.
    */
   function normalizeReading(reading, game, participants) {

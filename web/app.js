@@ -3292,11 +3292,18 @@
   /* ------------------------------------------------------------------ */
 
   const ST = window.TStats;
-  const KEY_STORE = 'turneringsapp.apikey';
-  const MODEL_STORE = 'turneringsapp.aimodel';
-  const DEFAULT_MODEL = 'claude-haiku-5-5';
-  // Modeller där servern kan köra om en nekad förfrågan på en annan modell
-  const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5', 'claude-fable-5-1'];
+  // Egen nyckel till Mistrals gratisnivå (console.mistral.ai). Sparas bara på enheten.
+  const KEY_STORE = 'turneringsapp.mistralkey';
+  const MODEL_STORE = 'turneringsapp.mistralmodel';
+  const DEFAULT_MODEL = 'mistral-medium-latest';
+  const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
+  // Tidigare versioner sparade en Claude-nyckel här. Den används inte längre.
+  try {
+    localStorage.removeItem('turneringsapp.apikey');
+    localStorage.removeItem('turneringsapp.aimodel');
+  } catch (e) {
+    /* ignorera */
+  }
 
   const getApiKey = () => {
     try {
@@ -3314,7 +3321,7 @@
   };
   const gameOf = (t) => ST.gameFor(t.settings);
 
-  // Vilket sätt att läsa av bilder som finns: claude.ai-sidans Claude, egen API-nyckel eller inget
+  // Vilket sätt att läsa av bilder som finns: claude.ai-sidans Claude, egen Mistral-nyckel eller inget
   let readerPromise = null;
   function aiReader() {
     if (readerPromise) return readerPromise;
@@ -3337,7 +3344,7 @@
   async function readerKind() {
     const r = await aiReader();
     if (r) return r;
-    if (getApiKey() && window.AnthropicSDK) return { kind: 'api' };
+    if (getApiKey()) return { kind: 'api' };
     return null;
   }
 
@@ -3387,7 +3394,52 @@
     });
   }
 
-  /** Läser av en scoreboard med Claude och returnerar ett utkast att granska. */
+  /** Skickar bilden till Mistral och returnerar svaret som följer schemat. Fel kastas som { code }. */
+  async function readWithMistral(file, prompt, schema, signal) {
+    const image = await imageToBase64(file);
+    let res;
+    try {
+      res = await fetch(MISTRAL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getApiKey() },
+        body: JSON.stringify({
+          model: getModel(),
+          temperature: 0,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: 'data:' + image.mediaType + ';base64,' + image.data },
+                { type: 'text', text: prompt },
+              ],
+            },
+          ],
+          response_format: { type: 'json_schema', json_schema: { name: 'scoreboard', schema: schema, strict: true } },
+        }),
+        signal: signal,
+      });
+    } catch (e) {
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      throw { code: 'offline' };
+    }
+    if (res.status === 401 || res.status === 403) throw { code: 'bad_key' };
+    if (res.status === 429) throw { code: 'rate_limited' };
+    if (res.status === 400 || res.status === 404 || res.status === 422) throw { code: 'bad_request' };
+    if (!res.ok) throw { code: 'upstream_error' };
+    let text = '';
+    try {
+      const choice = (await res.json()).choices[0];
+      if (choice.finish_reason === 'length') throw new Error('length');
+      const content = choice.message.content;
+      text = Array.isArray(content) ? content.map((c) => c.text || '').join('') : String(content);
+      return JSON.parse(text);
+    } catch (e) {
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      throw { code: 'invalid_json' };
+    }
+  }
+
+  /** Läser av en scoreboard och returnerar ett utkast att granska. */
   async function readScoreboard(t, file, participants, signal) {
     const game = gameOf(t);
     const reader = await readerKind();
@@ -3397,51 +3449,7 @@
     if (reader.kind === 'sample') {
       reading = await reader.sample.json(ST.scoreboardPrompt(game, teams, true), { images: [file], signal: signal, cache: false });
     } else {
-      const Anthropic = window.AnthropicSDK.default || window.AnthropicSDK;
-      const client = new Anthropic({ apiKey: getApiKey(), dangerouslyAllowBrowser: true });
-      const image = await imageToBase64(file);
-      const model = getModel();
-      const params = {
-        model: model,
-        max_tokens: 16000,
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: ST.scoreboardSchema(game) } },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
-              { type: 'text', text: ST.scoreboardPrompt(game, teams, false) },
-            ],
-          },
-        ],
-      };
-      if (FALLBACK_MODELS.includes(model)) {
-        params.betas = ['server-side-fallback-2026-07-01'];
-        params.fallbacks = 'default';
-      }
-      let response;
-      try {
-        response = await client.beta.messages.create(params, { signal: signal });
-      } catch (e) {
-        if (signal && signal.aborted) throw { code: 'cancelled' };
-        if (e instanceof Anthropic.AuthenticationError) throw { code: 'bad_key' };
-        if (e instanceof Anthropic.PermissionDeniedError) throw { code: 'bad_key' };
-        if (e instanceof Anthropic.RateLimitError) throw { code: 'rate_limited' };
-        if (e instanceof Anthropic.BadRequestError) throw { code: 'bad_request', message: e.message };
-        if (e instanceof Anthropic.APIConnectionError) throw { code: 'offline' };
-        throw { code: 'upstream_error', message: e && e.message };
-      }
-      if (response.stop_reason === 'refusal') throw { code: 'refused' };
-      if (response.stop_reason === 'max_tokens') throw { code: 'invalid_json' };
-      const text = response.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('');
-      try {
-        reading = JSON.parse(text);
-      } catch (e) {
-        throw { code: 'invalid_json' };
-      }
+      reading = await readWithMistral(file, ST.scoreboardPrompt(game, teams, false), ST.scoreboardSchema(game), signal);
     }
     return ST.normalizeReading(reading, game, participants);
   }
@@ -3449,9 +3457,9 @@
   const AI_ERRORS = {
     no_ai: 'Automatisk avläsning är inte påslagen – fyll i siffrorna själv eller lägg till en API-nyckel under Mer.',
     bad_key: 'API-nyckeln fungerar inte. Kontrollera den under Mer → Spel & statistik.',
-    rate_limited: 'För många förfrågningar just nu. Vänta en stund och försök igen.',
+    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen. Fungerar det aldrig: aktivera gratisplanen (Experiment) på console.mistral.ai.',
     offline: 'Ingen internetanslutning – fyll i siffrorna själv.',
-    refused: 'Claude kunde inte läsa bilden. Prova en annan skärmbild eller fyll i själv.',
+    refused: 'Bilden kunde inte läsas av. Prova en annan skärmbild eller fyll i själv.',
     invalid_json: 'Avläsningen blev ofullständig. Försök igen eller fyll i själv.',
     image_rejected: 'Bilden kunde inte användas. Välj en JPEG- eller PNG-skärmbild.',
     not_granted: 'Du tillät inte att sidan använder Claude. Fyll i siffrorna själv.',
@@ -3543,8 +3551,8 @@
       el.textContent = (r
         ? r.kind === 'sample'
           ? 'Bilder läses av med ditt Claude-konto. Du granskar siffrorna innan de sparas.'
-          : 'Bilder läses av med Claude via din API-nyckel. Du granskar siffrorna innan de sparas.'
-        : 'Automatisk avläsning är av: lägg till en Claude API-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.') + tip;
+          : 'Bilder läses av med Mistral via din API-nyckel. Du granskar siffrorna innan de sparas.'
+        : 'Automatisk avläsning är av: lägg till en gratis Mistral-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.') + tip;
     });
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
@@ -3715,7 +3723,7 @@
           if (!file) return;
           ctl = new AbortController();
           const myCtl = ctl;
-          status = `<span class="spinner"></span> Claude läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
+          status = `<span class="spinner"></span> Läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
           redraw();
           const ids = draft.teams.map((tm) => tm.teamId).filter(Boolean);
           const participants = participantInfo(t, ids.length ? ids : allIds);
@@ -3848,12 +3856,12 @@
       </section>
       ${g !== 'none' ? `
       <section class="card">
-        <h3>Automatisk avläsning med Claude</h3>
-        <p class="small">I webbversionen på claude.ai läses bilderna av med ditt Claude-konto, utan nyckel. I Android-appen och i HTML-filen behövs en egen API-nyckel.</p>
-        <label class="field"><span>Claude API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="sk-ant-…" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
+        <h3>Automatisk avläsning</h3>
+        <p class="small">Skärmbilder av scoreboarden läses av med Mistral. Det är gratis men kräver en egen nyckel. Skapa ett konto på console.mistral.ai, välj gratisplanen (Experiment) och skapa en API-nyckel.</p>
+        <label class="field"><span>Mistral API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="Klistra in nyckeln" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
         <label class="field"><span>Modell</span><input type="text" id="setModel" value="${esc(getModel())}"></label>
         ${key ? `<button class="btn small danger-text ghost" data-action="clearKey">Ta bort nyckeln</button>` : ''}
-        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Anthropic. Skapa en på console.anthropic.com. Med standardmodellen (claude-haiku-5-5) kostar en avläsning ungefär 1–2 öre; claude-opus-5-5 läser svår text bättre men kostar ca 40–70 öre per bild.</p>
+        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Mistral. På gratisplanen får Mistral använda bilderna för att förbättra sina modeller, så ladda bara upp scoreboards.</p>
       </section>` : ''}`;
   }
 
