@@ -36,6 +36,7 @@
   --silver: #9a958c;
   --bronze: #9c6a45;
 
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%236f685e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #ffffff;
   --window: .7;
   --grain: .28;
@@ -73,6 +74,7 @@
   --success: #9fb98d;
   --gold: #d6b26a;
 
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23a39b8e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #fff6e6;
   --window: .06;
   --grain: .22;
@@ -142,7 +144,8 @@ h1, h2, h3, h4 { font-weight: 600; font-variation-settings: "SOFT" 100, "WONK" 1
   font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 72;
 }
 .title-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.title-btn svg { color: var(--muted); }
+.title-btn svg { width: 15px; height: 10px; margin: 3px 0 0 4px; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: translate .3s var(--ease); }
+.title-btn:active svg { translate: 0 2px; }
 .top-actions { display: flex; gap: 4px; }
 .top-actions .icon-btn { color: var(--text); background: var(--glass-soft); border: 1px solid var(--border); }
 .timer-chip {
@@ -235,6 +238,12 @@ input[type="text"], input[type="number"], input[type="search"], select, textarea
 input[type="search"] { border-radius: 999px; }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+/* Egen handritad pil i alla rullistor, alltid 16px från högerkanten */
+select {
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  padding-right: 44px; text-overflow: ellipsis;
+  background-image: var(--chevron); background-repeat: no-repeat; background-position: right 16px center; background-size: 14px 9px;
+}
 select option { background: var(--bg); color: var(--text); }
 textarea { min-height: 140px; resize: vertical; }
 .field { display: block; margin-bottom: 12px; }
@@ -516,8 +525,9 @@ body.big .standings td { padding: 14px 12px; }
 details.cfg { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
 details.cfg > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; list-style: none; }
 details.cfg > summary::-webkit-details-marker { display: none; }
-details.cfg > summary::after { content: '▾'; float: right; color: var(--muted); }
-details.cfg[open] > summary::after { content: '▴'; }
+details.cfg > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+details.cfg > summary::after { content: ""; width: 14px; height: 9px; flex: none; background: var(--chevron) center / contain no-repeat; transition: rotate .3s var(--ease); }
+details.cfg[open] > summary::after { rotate: 180deg; }
 .cfg-body { padding: 4px 14px 14px; display: grid; gap: 2px; }
 .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cfg-grid.three { grid-template-columns: 1fr 1fr 1fr; }
