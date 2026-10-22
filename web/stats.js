@@ -142,6 +142,19 @@
         const key = normName(row.name) + '|' + (row.teamId || '');
         const p = (players[key] = players[key] || { key: key, name: row.name, teamId: row.teamId || null, maps: 0, sums: {}, counts: {} });
         p.maps++;
+        // K/D, +/- och KDA räknas bara på kartor där både kills och deaths finns
+        const k = num(row.stats && row.stats.k), d = num(row.stats && row.stats.d), a = num(row.stats && row.stats.a);
+        if (k != null && d != null) {
+          p.kd = p.kd || { k: 0, d: 0, ka: 0, da: 0, a: 0, withA: 0 };
+          p.kd.k += k;
+          p.kd.d += d;
+          if (a != null) {
+            p.kd.ka += k;
+            p.kd.da += d;
+            p.kd.a += a;
+            p.kd.withA++;
+          }
+        }
         game.stats.forEach((s) => {
           const v = num(row.stats && row.stats[s.key]);
           if (v == null) return;
@@ -156,10 +169,10 @@
         if (!p.counts[s.key]) v[s.key] = null;
         else v[s.key] = s.kind === 'avg' ? r2(p.sums[s.key] / p.counts[s.key]) : r2(p.sums[s.key]);
       });
-      if (hasStat(game, 'k') && hasStat(game, 'd') && v.k != null && v.d != null) {
-        v.kd = r2(v.k / Math.max(1, v.d));
-        v.diff = v.k - v.d;
-        if (v.a != null) v.kda = r2((v.k + v.a) / Math.max(1, v.d));
+      if (hasStat(game, 'k') && hasStat(game, 'd') && p.kd) {
+        v.kd = r2(p.kd.k / Math.max(1, p.kd.d));
+        v.diff = p.kd.k - p.kd.d;
+        if (hasStat(game, 'a') && p.kd.withA) v.kda = r2((p.kd.ka + p.kd.a) / Math.max(1, p.kd.da));
       }
       return { key: p.key, name: p.name, teamId: p.teamId, maps: p.maps, values: v };
     });

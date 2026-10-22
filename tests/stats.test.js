@@ -98,6 +98,18 @@ test('topplistan håller isär namn utan latinska bokstäver', () => {
   assert.equal(rows.find((r) => r.name === '李伟').values.k, 20);
 });
 
+test('K/D och +/- räknas bara på kartor där både K och D finns', () => {
+  const maps = [
+    { rows: [{ name: 'Zed', teamId: 'A', stats: { k: 30, d: null, a: 2 } }] },
+    { rows: [{ name: 'Zed', teamId: 'A', stats: { k: 10, d: 10, a: 4 } }] },
+  ];
+  const [p] = ST.leaderboard(maps, cs);
+  assert.equal(p.values.k, 40); // kills summeras ändå över alla kartor
+  assert.equal(p.values.kd, 1);
+  assert.equal(p.values.diff, 0);
+  assert.equal(p.values.kda, 1.4);
+});
+
 test('namnmatchning väljer inte ett namn som bara finns mitt i ett annat', () => {
   assert.equal(ST.matchName('Joanna', ['Ann', 'Bob']), null);
   assert.equal(ST.matchName('[NIP] TenZ', ['tenz', 'Bob']), 'tenz');
