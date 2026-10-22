@@ -3,7 +3,8 @@ const CACHE = 'turnering-v7';
 const FILES = ['./', './index.html', './styles.css', './logic.js', './stages.js', './stats.js', './vendor/anthropic-sdk.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // reload hoppar över webbläsarens HTTP-cache, så att en ny version aldrig sparas med gamla filer
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
