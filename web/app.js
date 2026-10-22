@@ -3719,6 +3719,7 @@
 
         async function read() {
           if (!file) return;
+          if (ctl) ctl.abort();
           ctl = new AbortController();
           const myCtl = ctl;
           status = `<span class="spinner"></span> Claude läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
@@ -3734,6 +3735,7 @@
             const unmatched = res.rows.filter((r) => r.name === r.ingame && !rosterNames().includes(r.name)).length;
             status = `✅ ${res.rows.length} spelare avlästa. Kontrollera siffrorna mot bilden innan du sparar.${unmatched ? ` ${unmatched} namn hittades inte i laguppställningen – rätta vid behov.` : ''}`;
           } catch (e) {
+            if (ctl !== myCtl) return; // en nyare avläsning har tagit över
             if (e && e.code === 'cancelled') status = 'Avläsningen stoppades.';
             else status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
           }
