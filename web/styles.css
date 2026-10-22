@@ -628,8 +628,7 @@ details.cfg[open]::details-content { block-size: auto; }
 .pos-btns button { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--border); background: var(--glass); font-weight: 700; font-size: 1rem; }
 .pos-btns button.on { background: var(--ink); color: var(--ink-text); border-color: transparent; }
 
-.roster { font-weight: 700; font-size: .75rem; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
-.roster.short { background: color-mix(in srgb, var(--gold) 22%, transparent); color: color-mix(in srgb, var(--gold) 55%, var(--text)); }
+.list .sub .short { color: color-mix(in srgb, var(--gold) 60%, var(--text)); font-weight: 700; }
 .chip[disabled] { opacity: .45; }
 
 /* --------------------------------------------------- Ritat slutspelsträd */

@@ -188,8 +188,9 @@
     if (isTeamMode(t)) {
       const size = t.settings.rosterSize;
       const n = (p.members || []).length;
-      const badge = size ? `<span class="roster ${n < size ? 'short' : ''}">${n}/${size}</span> ` : '';
-      return n || size ? `<div class="sub">${badge}${esc((p.members || []).join(', '))}</div>` : '';
+      if (!n && !size) return '';
+      const count = size ? ` <span class="${n < size ? 'short' : ''}">· ${n}/${size}</span>` : '';
+      return `<div class="sub">${n ? esc(p.members.join(', ')) : 'Inga spelare än'}${count}</div>`;
     }
     const team = p.teamId && teamById(t, p.teamId);
     return team ? `<div class="sub"><span class="team-tag"><i style="background:${esc(team.color)}"></i>${esc(team.name)}</span></div>` : '';
@@ -585,6 +586,8 @@
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
       if (!a) return;
+      // Ett tryck bredvid rutan ska bara bocka i, inte öppna redigeringen
+      if (a.dataset.action === 'edit' && e.target.closest('.check')) return;
       const id = a.dataset.id;
       if (a.dataset.action === 'pview') {
         ui.playersView = a.dataset.v;
@@ -624,14 +627,13 @@
       ? list
           .map(
             ({ p, i }) => `
-        <li class="${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
+        <li class="tap ${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}" data-action="edit" data-id="${p.id}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
           <span class="num">${i + 1}</span>
-          <div class="grow tap" data-action="edit" data-id="${p.id}">
+          <div class="grow">
             <div class="name">${esc(p.name)}</div>
             ${teamTag(t, p)}
           </div>
-          <label class="check" title="Aktiv"><input type="checkbox" data-action="toggle" data-id="${p.id}" ${p.active !== false ? 'checked' : ''}></label>
-          <button class="icon-btn" data-action="edit" data-id="${p.id}" aria-label="Redigera">${icon('edit')}</button>
+          <label class="check" title="Med i tabellen"><input type="checkbox" data-action="toggle" data-id="${p.id}" aria-label="${esc(p.name)} är med i tabellen" ${p.active !== false ? 'checked' : ''}></label>
         </li>`
           )
           .join('')
