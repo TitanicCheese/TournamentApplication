@@ -2419,6 +2419,7 @@
             <span class="stage-no">${i + 1}</span>
             <div class="grow"><h3 style="margin:0">${esc(st.name)}</h3><div class="small muted">${esc(SG.TYPES[st.type].label)}</div></div>
             <span class="pill ${pill}">${status}</span>
+            <button class="icon-btn" data-action="stageMenu" data-i="${i}" aria-label="Fler val för ${esc(st.name)}">${icon('more')}</button>
           </div>
           <p class="small" style="margin:8px 0 0">${esc(stageSummary(st))}</p>
           ${st.status === 'setup' ? stageConfigForm(t, st, i) : ''}
@@ -2427,11 +2428,6 @@
           <div class="row wrap" style="margin-top:12px">
             ${st.status === 'setup' && canStart(t, i) ? `<button class="btn primary" data-action="startStage" data-i="${i}">${icon('trophy')}Starta ${esc(st.name.toLowerCase())}</button>` : ''}
             ${st.status !== 'setup' ? `<button class="btn small" data-action="openStage" data-i="${i}">Visa ${R && R.done ? 'resultat' : 'bracket'}</button>` : ''}
-            ${st.status !== 'setup' ? `<button class="btn small danger-text" data-action="resetStage" data-i="${i}">Återställ fas</button>` : ''}
-            ${st.status === 'setup' ? `
-              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="-1" aria-label="Flytta upp" ${i === 0 ? 'disabled' : ''}>▲</button>
-              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="1" aria-label="Flytta ner" ${i === t.stages.length - 1 ? 'disabled' : ''}>▼</button>
-              <button class="btn small ghost danger-text" data-action="delStage" data-i="${i}">${icon('del')}Ta bort fas</button>` : ''}
           </div>
         </section>`;
     });
@@ -2442,10 +2438,34 @@
 
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
-      if (!a) return;
-      const i = Number(a.dataset.i);
+      if (a) stageAction(a.dataset.action, Number(a.dataset.i), a.dataset);
+    };
+
+    // Val i ⋯-menyn för en fas: flytta, ta bort eller återställa
+    function stageMenu(i) {
       const st = t.stages[i];
-      switch (a.dataset.action) {
+      const setup = st.status === 'setup';
+      const canUp = setup && i > 0 && t.stages[i - 1].status === 'setup';
+      const canDown = setup && i < t.stages.length - 1;
+      const item = (act, ic, label, extra) => `<li class="tap ${act === 'delStage' || act === 'resetStage' ? 'danger-row' : ''}" data-m="${act}" ${extra || ''}>${icon(ic)}<div class="grow"><div class="name">${label}</div></div></li>`;
+      const rows = setup
+        ? (canUp ? item('moveStage', 'upload', 'Flytta upp', 'data-d="-1"') : '') + (canDown ? item('moveStage', 'download', 'Flytta ner', 'data-d="1"') : '') + item('delStage', 'del', 'Ta bort fas')
+        : item('resetStage', 'del', 'Återställ fas');
+      const m = openModal({ title: st.name, body: `<ul class="list">${rows}</ul>` });
+      m.el.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-m]');
+        if (!row) return;
+        m.close();
+        stageAction(row.dataset.m, i, row.dataset);
+      });
+    }
+
+    function stageAction(action, i, data) {
+      const st = t.stages[i];
+      switch (action) {
+        case 'stageMenu':
+          stageMenu(i);
+          break;
         case 'preset':
           presetPicker((p) => {
             const go = () => {
@@ -2467,7 +2487,7 @@
           commit('Fasen borttagen', true);
           break;
         case 'moveStage': {
-          const j = i + Number(a.dataset.d);
+          const j = i + Number(data.d);
           if (j < 0 || j >= t.stages.length || t.stages[j].status !== 'setup') return;
           [t.stages[i], t.stages[j]] = [t.stages[j], t.stages[i]];
           t.presetId = 'custom';
@@ -2505,8 +2525,8 @@
         case 'seedUp':
         case 'seedDown': {
           const seeds = seedsFor(t, i).slice();
-          const k = Number(a.dataset.k);
-          const j = k + (a.dataset.action === 'seedUp' ? -1 : 1);
+          const k = Number(data.k);
+          const j = k + (action === 'seedUp' ? -1 : 1);
           if (j < 0 || j >= seeds.length) return;
           [seeds[k], seeds[j]] = [seeds[j], seeds[k]];
           st.customSeeds = seeds;
