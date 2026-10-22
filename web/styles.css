@@ -8,36 +8,36 @@
 
 :root {
   --bg: #ebe6de;
-  --text: #1d1b18;
-  --muted: #6f685e;
-  --border: rgba(29, 27, 24, .12);
-  --hairline: rgba(29, 27, 24, .09);
+  --text: #191714;
+  --muted: #57514a;
+  --border: rgba(29, 27, 24, .2);
+  --hairline: rgba(29, 27, 24, .13);
 
-  --glass: rgba(255, 253, 249, .55);
-  --glass-strong: rgba(255, 253, 249, .86);
-  --glass-soft: rgba(255, 253, 249, .4);
+  --glass: rgba(255, 253, 249, .74);
+  --glass-strong: rgba(255, 253, 249, .92);
+  --glass-soft: rgba(255, 253, 249, .6);
   --glass-edge: rgba(255, 255, 255, .8);
   --glass-shadow: 0 18px 40px -24px rgba(40, 32, 22, .4), 0 1px 2px rgba(40, 32, 22, .06);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .9);
   --blur: blur(18px) saturate(120%);
 
   --surface: var(--glass);
-  --surface-2: rgba(255, 253, 249, .62);
+  --surface-2: rgba(255, 253, 249, .85);
 
   /* --ink är knappfärgen, --primary är den dämpade accenten */
   --ink: #1d1b18;
   --ink-text: #f6f2ea;
-  --primary: #7d6b54;
+  --primary: #5e4f3c;
   --primary-grad: var(--ink);
   --primary-text: var(--ink-text);
-  --primary-soft: rgba(125, 107, 84, .14);
+  --primary-soft: rgba(94, 79, 60, .13);
   --danger: #a3402e;
   --success: #5d7a4e;
   --gold: #b08a3e;
   --silver: #9a958c;
   --bronze: #9c6a45;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%236f685e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%2357514a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%231d1b18' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #ffffff;
   --window: .7;
@@ -57,28 +57,28 @@
 }
 :root[data-theme="dark"] {
   --bg: #141311;
-  --text: #ece7df;
-  --muted: #a39b8e;
-  --border: rgba(236, 231, 223, .13);
-  --hairline: rgba(236, 231, 223, .08);
+  --text: #f3eee6;
+  --muted: #bdb4a6;
+  --border: rgba(236, 231, 223, .2);
+  --hairline: rgba(236, 231, 223, .12);
 
-  --glass: rgba(38, 36, 32, .6);
+  --glass: rgba(38, 36, 32, .78);
   --glass-strong: rgba(32, 30, 27, .92);
-  --glass-soft: rgba(255, 255, 255, .05);
+  --glass-soft: rgba(255, 255, 255, .07);
   --glass-edge: rgba(255, 255, 255, .1);
   --glass-shadow: 0 18px 40px -20px rgba(0, 0, 0, .8);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .08);
 
-  --surface-2: rgba(255, 255, 255, .05);
+  --surface-2: rgba(255, 255, 255, .07);
   --ink: #ece7df;
   --ink-text: #141311;
-  --primary: #c9b699;
+  --primary: #d6c4a6;
   --primary-soft: rgba(201, 182, 153, .15);
   --danger: #d9826f;
   --success: #9fb98d;
   --gold: #d6b26a;
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23a39b8e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.6 2.2c2.3 1.9 4.4 3.9 6.4 5.9 2.1-2.1 4.2-4 6.4-6.1' fill='none' stroke='%23bdb4a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12'%3E%3Cpath d='M1.5 6.6c1.4 1.2 2.6 2.4 3.6 3.7C7.4 6.6 9.8 3.8 12.6 1.4' fill='none' stroke='%23ece7df' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --light: #fff6e6;
   --window: .06;
