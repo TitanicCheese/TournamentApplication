@@ -627,7 +627,7 @@
       ? list
           .map(
             ({ p, i }) => `
-        <li class="tap ${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}" data-action="edit" data-id="${p.id}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
+        <li tabindex="0" role="button" class="tap ${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}" data-action="edit" data-id="${p.id}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
           <span class="num">${i + 1}</span>
           <div class="grow">
             <div class="name">${esc(p.name)}</div>
@@ -816,7 +816,7 @@
             .map((team) => {
               const members = t.players.filter((p) => p.teamId === team.id);
               const names = members.slice(0, 5).map((p) => p.name).join(', ') + (members.length > 5 ? ' …' : '');
-              return `<li class="tap" data-action="editTeam" data-id="${team.id}">
+              return `<li tabindex="0" role="button" class="tap" data-action="editTeam" data-id="${team.id}">
                 <span class="team-swatch" style="background:${esc(team.color)}"></span>
                 <div class="grow"><div class="name">${esc(team.name)}</div><div class="sub">${members.length} spelare${names ? ' · ' + esc(names) : ''}</div></div>
                 ${icon('edit')}
@@ -1255,7 +1255,7 @@
       }
       const mv = r.move > 0 ? `<span class="move up">▲${r.move}</span>` : r.move < 0 ? `<span class="move down">▼${-r.move}</span>` : '';
       body += `
-        <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
+        <tr tabindex="0" class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
           <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
           <td class="l"><div class="pname">${esc(r.name)}${mv}</div>${clubLine(t, r.player)}</td>
           <td>${r.played}</td>
@@ -1302,7 +1302,7 @@
       }
       const mv = r.move > 0 ? `<span class="move up">▲${r.move}</span>` : r.move < 0 ? `<span class="move down">▼${-r.move}</span>` : '';
       body += `
-        <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
+        <tr tabindex="0" class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
           <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
           <td class="l"><div class="pname">${teamDot(r.team)}${esc(r.name)}${mv}</div></td>
           <td>${r.size}</td>
@@ -1682,9 +1682,9 @@
 
       <div class="section-title">Verktyg</div>
       <ul class="list">
-        <li class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
-        <li class="tap" data-action="groups">${icon('shuffle')}<div class="grow"><div class="name">Lottning & grupper</div><div class="sub">Slumpa par eller dela in i grupper</div></div></li>
-        <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="groups">${icon('shuffle')}<div class="grow"><div class="name">Lottning & grupper</div><div class="sub">Slumpa par eller dela in i grupper</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
       </ul>
 
       ${isStages(t) ? '' : `<div class="section-title">Poängräkning</div>
@@ -1705,9 +1705,9 @@
 
       <div class="section-title">Data & säkerhetskopia</div>
       <ul class="list">
-        <li class="tap" data-action="export">${icon('download')}<div class="grow"><div class="name">Exportera säkerhetskopia</div><div class="sub">Alla turneringar som JSON-fil</div></div></li>
-        <li class="tap" data-action="import">${icon('upload')}<div class="grow"><div class="name">Importera säkerhetskopia</div><div class="sub">Från fil eller inklistrad text</div></div></li>
-        <li class="tap" data-action="csv">${icon('chart')}<div class="grow"><div class="name">Exportera tabell (CSV)</div><div class="sub">Öppnas i Excel / Google Kalkylark</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="export">${icon('download')}<div class="grow"><div class="name">Exportera säkerhetskopia</div><div class="sub">Alla turneringar som JSON-fil</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="import">${icon('upload')}<div class="grow"><div class="name">Importera säkerhetskopia</div><div class="sub">Från fil eller inklistrad text</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="csv">${icon('chart')}<div class="grow"><div class="name">Exportera tabell (CSV)</div><div class="sub">Öppnas i Excel / Google Kalkylark</div></div></li>
       </ul>
 
       <div class="section-title">Utseende</div>
@@ -1858,7 +1858,7 @@
       el.innerHTML = Object.values(db.tournaments)
         .sort((a, b) => b.createdAt - a.createdAt)
         .map(
-          (x) => `<li class="tap ${x.id === db.activeId ? 'current' : ''}" data-tid="${x.id}">
+          (x) => `<li tabindex="0" role="button" class="tap ${x.id === db.activeId ? 'current' : ''}" data-tid="${x.id}">
             <span class="t-mark">${x.id === db.activeId ? icon('check') : ''}</span>
             <div class="grow"><div class="name">${esc(x.name)}</div><div class="sub">${tournamentSub(x)}</div></div>
             <button class="icon-btn" data-tmenu="${x.id}" aria-label="Fler val för ${esc(x.name)}">${icon('more')}</button>
@@ -1882,9 +1882,9 @@
     const m = openModal({
       title: x.name,
       body: `<ul class="list">
-        <li class="tap" data-m="rename">${icon('edit')}<div class="grow"><div class="name">Byt namn</div></div></li>
-        <li class="tap" data-m="copy">${icon('people')}<div class="grow"><div class="name">Kopiera till ny turnering</div><div class="sub">Samma ${W(x).one}, format och inställningar</div></div></li>
-        <li class="tap danger-row" data-m="delete">${icon('del')}<div class="grow"><div class="name">Ta bort</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-m="rename">${icon('edit')}<div class="grow"><div class="name">Byt namn</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-m="copy">${icon('people')}<div class="grow"><div class="name">Kopiera till ny turnering</div><div class="sub">Samma ${W(x).one}, format och inställningar</div></div></li>
+        <li tabindex="0" role="button" class="tap danger-row" data-m="delete">${icon('del')}<div class="grow"><div class="name">Ta bort</div></div></li>
       </ul>`,
     });
     m.el.addEventListener('click', (e) => {
@@ -2449,7 +2449,7 @@
       const setup = st.status === 'setup';
       const canUp = setup && i > 0 && t.stages[i - 1].status === 'setup';
       const canDown = setup && i < t.stages.length - 1;
-      const item = (act, ic, label, extra) => `<li class="tap ${act === 'delStage' || act === 'resetStage' ? 'danger-row' : ''}" data-m="${act}" ${extra || ''}>${icon(ic)}<div class="grow"><div class="name">${label}</div></div></li>`;
+      const item = (act, ic, label, extra) => `<li tabindex="0" role="button" class="tap ${act === 'delStage' || act === 'resetStage' ? 'danger-row' : ''}" data-m="${act}" ${extra || ''}>${icon(ic)}<div class="grow"><div class="name">${label}</div></div></li>`;
       const rows = setup
         ? (canUp ? item('moveStage', 'upload', 'Flytta upp', 'data-d="-1"') : '') + (canDown ? item('moveStage', 'download', 'Flytta ner', 'data-d="1"') : '') + item('delStage', 'del', 'Ta bort fas')
         : item('resetStage', 'del', 'Återställ fas');
@@ -3652,7 +3652,7 @@
           .map((m) => {
             const teams = (m.teams || []).map((tm) => `${esc(tm.teamId ? pname(t, tm.teamId) : tm.name || '?')}${tm.score != null ? ' ' + fmt(tm.score) : ''}`).join(' – ');
             const top = ST.sortBoard(ST.leaderboard([m], game), game.stats[0].key)[0];
-            return `<li class="tap" data-action="editMap" data-id="${m.id}"><div class="grow"><div class="name">${esc(m.label || 'Karta')}${m.matchLabel ? ` <span class="small muted">· ${esc(m.matchLabel)}</span>` : ''}</div>
+            return `<li tabindex="0" role="button" class="tap" data-action="editMap" data-id="${m.id}"><div class="grow"><div class="name">${esc(m.label || 'Karta')}${m.matchLabel ? ` <span class="small muted">· ${esc(m.matchLabel)}</span>` : ''}</div>
               <div class="sub">${teams}${top ? ` · bäst: ${esc(top.name)} (${fmt(top.values[game.stats[0].key])} ${esc(game.stats[0].label)})` : ''}</div></div>${icon('edit')}</li>`;
           })
           .join('')}</ul>` : `<div class="empty">${icon('chart')}<h3>Inga kartor än</h3><div>Ladda upp en skärmbild av scoreboarden efter en karta. ${esc(game.hint)}</div></div>`}
@@ -4138,6 +4138,14 @@
     if (!ui.wizard) tournamentSheet();
   });
   $('#timerChip').addEventListener('click', timerDialog);
+
+  // Rader som går att trycka på öppnas också med Enter eller mellanslag
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap[tabindex]')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
 
   // Bakåtknappen på Android: stäng dialog → gå till tabellen → avsluta
   window.appBack = function () {

@@ -295,6 +295,7 @@ textarea { min-height: 140px; resize: vertical; }
 .list-head .count { font-weight: 700; white-space: nowrap; padding-left: 6px; }
 .list-head select { border-radius: 999px; }
 .list li.tap { cursor: pointer; }
+.tap:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .list li.tap:active { background: var(--primary-soft); }
 .list li.current { background: var(--primary-soft); }
 /* Nya spelare tonas in, lite förskjutet vid flera på en gång */
