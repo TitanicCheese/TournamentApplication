@@ -133,18 +133,47 @@ test('CS Major: Swiss 16 lag → 8 vidare, avgörande matcher Bo3', () => {
   assert.equal(P.champion, 't1');
 });
 
-test('Mario Kart: heat om 4, topp 2 vidare tills final', () => {
-  const [heats] = S.stagesFromPreset(S.PRESETS.find((p) => p.id === 'mariokart'));
-  S.start(heats, teams(16));
-  let R = S.resolve(heats);
-  assert.equal(R.rounds[0].heats.length, 4);
-  assert.ok(R.rounds[0].heats.every((h) => h.players.length === 4));
-  R = playAll(heats);
-  assert.ok(R.done);
-  assert.deepEqual(R.rounds.map((r) => r.heats.length), [4, 2, 1]); // 16 → 8 → 4 (final)
+test('Mario Kart: poängfas i slumpade lobbyer, topp 8 till heat, topp 2 vidare tills final', () => {
+  const [lob, heats] = S.stagesFromPreset(S.PRESETS.find((p) => p.id === 'mariokart'));
+  assert.equal(lob.type, 'lobbies');
+  S.start(lob, teams(16));
+  let L = S.resolve(lob);
+  assert.equal(L.rounds[0].heats.length, 4);
+  assert.ok(L.rounds[0].heats.every((h) => h.players.length === 4));
+  assert.equal(new Set([].concat(...L.rounds[0].heats.map((h) => h.players))).size, 16);
+  // Spelets poäng: lägst seednummer får mest (t1 = 59, t16 = 44)
+  L.rounds[0].heats.forEach((h) => S.setLobbyResult(lob, h.id, Object.fromEntries(h.players.map((p) => [p, 60 - seedNum(p)]))));
+  L = S.resolve(lob);
+  assert.ok(L.done);
+  assert.deepEqual(L.qualifiers, teams(8));
+  assert.equal(L.table[0].total, 59);
+  assert.equal(L.table.filter((r) => r.status === 'out').length, 8);
+  S.start(heats, L.qualifiers);
+  const R = playAll(heats);
+  assert.deepEqual(R.rounds.map((r) => r.heats.length), [2, 1]); // 8 → 4 (final)
   assert.equal(R.champion, 't1');
-  assert.deepEqual(R.placements.slice(0, 4), [['t1'], ['t2'], ['t3'], ['t4']]);
-  assert.equal([].concat(...R.placements).length, 16);
+});
+
+test('poängfas: ojämnt antal, flera omgångar och delvis ifyllt', () => {
+  const st = S.newStage('lobbies');
+  Object.assign(st.cfg, { rounds: 3, advance: 4 });
+  assert.deepEqual(S.splitLobbies(teams(10), 4).map((g) => g.length), [4, 3, 3]);
+  S.start(st, teams(10));
+  let R = S.resolve(st);
+  assert.equal(R.rounds.length, 3);
+  R.rounds.forEach((rd) => assert.equal([].concat(...rd.heats.map((h) => h.players)).length, 10));
+  const h = R.rounds[0].heats[0];
+  S.setLobbyResult(st, h.id, { [h.players[0]]: 45 });
+  R = S.resolve(st);
+  assert.ok(!R.done);
+  assert.equal(R.rounds[0].heats[0].started, true);
+  assert.equal(R.rounds[0].heats[0].complete, false);
+  R.rounds.forEach((rd) => rd.heats.forEach((x) => S.setLobbyResult(st, x.id, Object.fromEntries(x.players.map((p) => [p, seedNum(p) === 7 ? 60 : 20])))));
+  R = S.resolve(st);
+  assert.ok(R.done);
+  assert.equal(R.qualifiers[0], 't7');
+  assert.equal(R.table[0].total, 180);
+  assert.equal(R.qualifiers.length, 4);
 });
 
 test('heat med flera race och poängtabell', () => {

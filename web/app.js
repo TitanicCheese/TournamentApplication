@@ -2249,9 +2249,13 @@
         return `${boText(c.bo)} · övre final ${boText(c.ubFinalBo)} · undre final ${boText(c.lbFinalBo)} · final ${boText(c.gfBo)}${c.gfReset ? ' (med omstart)' : ''}`;
       case 'heats':
         return `${c.heatSize} per heat · topp ${c.advancePerHeat} vidare · ${c.races} ${c.races === 1 ? 'race' : 'race'} per heat`;
+      case 'lobbies':
+        return `${lobbyLabel(c.size)} · ${c.rounds} ${c.rounds === 1 ? 'omgång' : 'omgångar'} · max ${c.maxPoints} p · ${c.advance > 0 ? `topp ${c.advance} vidare` : 'alla vidare'}`;
     }
     return '';
   }
+
+  const lobbyLabel = (size) => Array(Math.max(2, size || 4)).fill('1').join('v') + '-lobbyer';
 
   function presetName(t) {
     const p = SG.PRESETS.find((x) => x.id === t.presetId);
@@ -2507,6 +2511,14 @@
         if (!isLast) f += cfgField(i, 'advance', 'Antal vidare till nästa fas (0 = alla)', c.advance);
         if (n) hint = heatPlan(n, c);
         break;
+      case 'lobbies':
+        f += `<div class="cfg-grid three">${cfgField(i, 'size', 'Per lobby', c.size, { min: 2 })}${cfgField(i, 'rounds', 'Omgångar', c.rounds, { min: 1 })}${cfgField(i, 'maxPoints', 'Maxpoäng per lobby', c.maxPoints, { min: 1 })}</div>`;
+        f += cfgField(i, 'advance', 'Antal vidare till nästa fas (0 = alla)', c.advance);
+        if (n) {
+          const sizes = SG.splitLobbies(Array(n).fill(0), Math.max(2, c.size)).map((g) => g.length);
+          hint = `${n} deltagare → ${sizes.length} ${sizes.length === 1 ? 'lobby' : 'lobbyer'} (${sizes.join('+')}) per omgång, slumpade. ${c.advance > 0 && c.advance < n ? `De ${c.advance} med flest poäng går vidare.` : 'Alla går vidare, seedade efter poäng.'}`;
+        }
+        break;
     }
     return `<details class="cfg"><summary>Inställningar</summary><div class="cfg-body">${f}${hint ? `<p class="small muted" style="margin:0">${esc(hint)}</p>` : ''}</div></details>`;
   }
@@ -2664,7 +2676,10 @@
     const st = t.stages[i];
     const R = decorate(SG.resolve(st));
     let html = stageChips(t, i) + nextStageBanner(t, i, R);
-    if (st.type === 'heats') {
+    if (st.type === 'lobbies') {
+      html += `<p class="small muted" style="margin:0 4px 10px">Tryck på en lobby och skriv in poängen som spelet visar (max ${st.cfg.maxPoints}).</p>`;
+      html += lobbyRoundsHtml(t, R, i, st) + lobbyTable(t, R, st);
+    } else if (st.type === 'heats') {
       const rd = R.rounds[R.rounds.length - 1];
       html += `<div class="section-title">${esc(rd.name)} ${rd.complete ? '· klar' : ''}</div>`;
       html += `<div class="heat-grid">${rd.heats.map((h) => heatCard(t, h, i, st)).join('')}</div>`;
@@ -2698,9 +2713,100 @@
     } else if (a.dataset.action === 'goFormat') setTab('playoff');
     else if (a.dataset.action === 'match') stageMatchDialog(t, i, a.dataset.id);
     else if (a.dataset.action === 'heat') heatDialog(t, i, a.dataset.id);
+    else if (a.dataset.action === 'lobby') lobbyDialog(t, i, a.dataset.id);
+  }
+
+  function lobbyRoundsHtml(t, R, i, st) {
+    // Omgångar som inte är klara först
+    const order = R.rounds.filter((rd) => !rd.complete).concat(R.rounds.filter((rd) => rd.complete));
+    return order
+      .map((rd) => `<div class="section-title">${esc(rd.name)}${rd.complete ? ' · klar' : ''}</div><div class="heat-grid">${rd.heats.map((h) => heatCard(t, h, i, st)).join('')}</div>`)
+      .join('');
+  }
+
+  function lobbyTable(t, R, st) {
+    const adv = R.qualifiers.length;
+    return `<section class="card"><h3>Poängställning</h3><table class="mini-table gtable"><thead><tr><th>#</th><th class="l">${W(t).One}</th>${R.rounds.length > 1 ? '<th>Spelat</th><th>Bästa</th>' : ''}<th>Poäng</th></tr></thead><tbody>${R.table
+      .map(
+        (r) =>
+          `<tr class="${r.status}"><td>${r.pos}</td><td class="l">${esc(pname(t, r.id))}</td>${R.rounds.length > 1 ? `<td>${r.played}/${R.rounds.length}</td><td>${fmt(r.best)}</td>` : ''}<td><b>${fmt(r.total)}</b></td></tr>`
+      )
+      .join('')}</tbody></table>
+      <p class="small muted" style="margin:8px 0 0">${R.done ? `De ${adv} bästa går vidare (grönt).` : `De ${st.cfg.advance > 0 ? Math.min(st.cfg.advance, R.table.length) : R.table.length} med flest poäng går vidare när alla lobbyer är klara.`}</p></section>`;
+  }
+
+  function lobbyDialog(t, i, lobbyId) {
+    const st = t.stages[i];
+    const R = SG.resolve(st);
+    let lobby = null;
+    R.rounds.forEach((rd) => rd.heats.forEach((h) => h.id === lobbyId && (lobby = h)));
+    if (!lobby) return;
+    if (stageLocked(t, i)) return toast('Nästa fas har startat – återställ den under Format för att ändra här');
+    const max = st.cfg.maxPoints;
+    const prev = (st.results[lobbyId] && st.results[lobbyId].points) || {};
+    openModal({
+      title: `Lobby ${lobby.index + 1}${R.rounds.length > 1 ? ` · omgång ${lobby.round + 1}` : ''}`,
+      body: `<p class="small muted" style="margin-top:0">Skriv in poängen som spelet visar efter sista racet (0–${max}).</p>
+        <div class="pos-list">${lobby.players
+          .map(
+            (p) => `<label class="pos-row"><div class="grow"><b>${esc(pname(t, p))}</b></div>
+            <input type="number" inputmode="numeric" min="0" max="${max}" data-p="${p}" value="${prev[p] != null ? prev[p] : ''}" placeholder="–" style="width:90px;text-align:center"></label>`
+          )
+          .join('')}</div>`,
+      actions: [
+        {
+          label: 'Rensa',
+          onClick: () => {
+            const before = SG.resolve(st);
+            delete st.results[lobbyId];
+            afterStageChange(t, i, before);
+          },
+        },
+        {
+          label: 'Spara',
+          cls: 'primary',
+          onClick: (w) => {
+            const points = {};
+            for (const inp of $$('input[data-p]', w)) {
+              if (inp.value.trim() === '') continue;
+              const v = parseNum(inp.value);
+              if (!L.isNum(v) || v < 0 || v > max) {
+                toast(`Poängen måste vara mellan 0 och ${max}`);
+                return false;
+              }
+              points[inp.dataset.p] = v;
+            }
+            const before = SG.resolve(st);
+            if (Object.keys(points).length) SG.setLobbyResult(st, lobbyId, points);
+            else delete st.results[lobbyId];
+            afterStageChange(t, i, before);
+          },
+        },
+      ],
+      onOpen: (w) => {
+        const inputs = $$('input[data-p]', w);
+        const first = inputs.find((x) => x.value === '') || inputs[0];
+        if (first) setTimeout(() => first.focus(), 50);
+        inputs.forEach((inp, k) =>
+          inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && inputs[k + 1]) {
+              e.preventDefault();
+              inputs[k + 1].focus();
+            }
+          })
+        );
+      },
+    });
   }
 
   function heatCard(t, h, i, st) {
+    if (h.lobby)
+      return `<button class="heat ${h.complete ? 'done' : ''}" data-action="lobby" data-i="${i}" data-id="${h.id}">
+      <span class="heat-head"><b>Lobby ${h.index + 1}</b><span class="small muted">${h.complete ? 'Klar' : h.started ? 'Pågår' : 'Ej spelad'}</span></span>
+      ${h.rows
+        .map((r) => `<span class="heat-row ${r.status}"><span class="hpos">${h.complete ? r.pos : ''}</span><span class="pn">${esc(pname(t, r.id))}</span><span class="ps">${r.total != null ? fmt(r.total) + ' p' : ''}</span></span>`)
+        .join('')}
+    </button>`;
     return `<button class="heat ${h.complete ? 'done' : ''} ${h.isFinal ? 'final' : ''}" data-action="heat" data-i="${i}" data-id="${h.id}">
       <span class="heat-head"><b>${h.isFinal ? 'Final' : 'Heat ' + (h.index + 1)}</b><span class="small muted">${h.complete ? 'Klar' : h.started ? 'Pågår' : 'Ej kört'}</span></span>
       ${h.rows
@@ -2724,7 +2830,7 @@
         toast(`🏆 ${pname(t, R.champion)} vinner ${t.name}!`);
         vibrate([200, 100, 200]);
       } else toast(`${st.name} är klar! ${isLast ? '' : 'Starta nästa fas under Format.'}`);
-    } else if (before && st.type !== 'heats') {
+    } else if (before && st.type !== 'heats' && st.type !== 'lobbies') {
       const lost = before.matches.filter((m) => m.state === 'done').length - R.matches.filter((m) => m.state === 'done').length;
       if (lost > 0) toast(`Obs: ${lost} senare ${lost === 1 ? 'match' : 'matcher'} påverkades och måste spelas om`);
     }
@@ -2957,6 +3063,8 @@
       }
     } else if (st.type === 'single' || st.type === 'double') {
       html += bracketCanvas(t, stageTreeNodes(st, R), { stage: i });
+    } else if (st.type === 'lobbies') {
+      html += lobbyTable(t, R, st) + lobbyRoundsHtml(t, R, i, st);
     } else if (st.type === 'heats') {
       R.rounds
         .slice()
@@ -2986,6 +3094,8 @@
       });
     } else if (st.type === 'swiss') {
       R.table.forEach((r) => lines.push(`${r.w}–${r.l}  ${pname(t, r.id)}${r.status === 'advanced' ? '  ✓' : r.status === 'out' ? '  ✗' : ''}`));
+    } else if (st.type === 'lobbies') {
+      R.table.forEach((r) => lines.push(`${r.pos}. ${pname(t, r.id)}  ${fmt(r.total)} p${r.status === 'advanced' ? '  ✓' : ''}`));
     } else if (st.type === 'heats') {
       R.rounds.forEach((rd) => {
         lines.push(rd.name.toUpperCase());

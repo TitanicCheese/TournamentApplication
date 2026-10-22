@@ -8,6 +8,7 @@
  *   single  – enkelutslagning
  *   double  – dubbelutslagning (övre/undre träd + final)
  *   heats   – heat med flera deltagare (t.ex. Mario Kart): de bästa i varje heat går vidare
+ *   lobbies – poängfas i slumpade lobbyer (t.ex. 1v1v1v1): spelets poäng summeras, de X bästa går vidare
  *
  * Ren logik utan DOM – används av appen och av testerna (Node).
  */
@@ -23,6 +24,7 @@
     single: { label: 'Utslagning', short: 'Utslagning', desc: 'Förlorar man är man ute.' },
     double: { label: 'Dubbelutslagning', short: 'Dubbelutslagning', desc: 'Övre och undre träd – man åker ut efter två förluster.' },
     heats: { label: 'Heat (flera per match)', short: 'Heat', desc: 'Flera deltagare per heat, de bästa går vidare (t.ex. Mario Kart).' },
+    lobbies: { label: 'Poängfas (slumpade lobbyer)', short: 'Poängfas', desc: 'Slumpade lobbyer (t.ex. 1v1v1v1). Poängen från spelet summeras och de X bästa går vidare.' },
   };
 
   const MK_POINTS = [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -41,6 +43,8 @@
         return { bo: 3, ubFinalBo: 3, lbFinalBo: 5, gfBo: 5, gfReset: false, advance: 0 };
       case 'heats':
         return { heatSize: 4, advancePerHeat: 2, races: 1, points: MK_POINTS.join(', '), advance: 0 };
+      case 'lobbies':
+        return { size: 4, rounds: 1, maxPoints: 60, advance: 8 };
       default:
         return {};
     }
@@ -419,6 +423,53 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Poängfas: slumpade lobbyer                                           */
+  /* ------------------------------------------------------------------ */
+
+  // Delar in i lobbyer så jämnt som möjligt (t.ex. 10 → 4+3+3)
+  function splitLobbies(ids, size) {
+    const count = Math.max(1, Math.ceil(ids.length / size));
+    const out = [];
+    let at = 0;
+    for (let i = 0; i < count; i++) {
+      const len = Math.floor(ids.length / count) + (i < ids.length % count ? 1 : 0);
+      out.push(ids.slice(at, at + len));
+      at += len;
+    }
+    return out;
+  }
+
+  // Slumpar alla omgångar direkt och försöker undvika att samma spelare möts igen
+  function buildLobbies(ids, cfg, rand) {
+    const met = {};
+    const key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+    const rounds = [];
+    for (let r = 0; r < Math.max(1, cfg.rounds); r++) {
+      let best = null;
+      let bestCost = Infinity;
+      for (let tries = 0; tries < (r ? 60 : 1); tries++) {
+        const groups = splitLobbies(L.shuffle(ids, rand), Math.max(2, cfg.size));
+        let cost = 0;
+        groups.forEach((g) => g.forEach((a, i) => g.slice(i + 1).forEach((b) => (cost += met[key(a, b)] || 0))));
+        if (cost < bestCost) (best = groups), (bestCost = cost);
+        if (!cost) break;
+      }
+      best.forEach((g) => g.forEach((a, i) => g.slice(i + 1).forEach((b) => (met[key(a, b)] = (met[key(a, b)] || 0) + 1))));
+      rounds.push({ heats: best.map((players, i) => ({ id: `l${r}-${i}`, round: r, index: i, players: players })) });
+    }
+    return { rounds: rounds };
+  }
+
+  function lobbyStanding(lobby, res) {
+    const pts = (res && res.points) || {};
+    const has = (p) => typeof pts[p] === 'number' && isFinite(pts[p]);
+    const rows = lobby.players.map((p) => ({ id: p, total: has(p) ? pts[p] : null }));
+    const order = rows.slice().sort((a, b) => (b.total == null ? -1 : b.total) - (a.total == null ? -1 : a.total));
+    order.forEach((r, i) => (r.pos = i + 1));
+    return { rows: order, complete: rows.every((r) => r.total != null), started: rows.some((r) => r.total != null) };
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Publika funktioner                                                  */
   /* ------------------------------------------------------------------ */
 
@@ -427,7 +478,7 @@
   }
 
   /** Startar en fas med deltagarna i seedningsordning. */
-  function start(stage, entrants) {
+  function start(stage, entrants, rand) {
     stage.entrants = entrants.slice();
     stage.results = {};
     stage.status = 'live';
@@ -444,6 +495,8 @@
       stage.data = { matches: matches, rounds: 1 };
     } else if (stage.type === 'heats') {
       stage.data = { rounds: [{ heats: makeHeats(entrants, stage.cfg.heatSize, 0) }] };
+    } else if (stage.type === 'lobbies') {
+      stage.data = buildLobbies(entrants, stage.cfg, rand);
     }
     return stage;
   }
@@ -591,6 +644,35 @@
       }
       R.placements = tiers(pl);
       R.champion = R.done ? lastRound.heats[0].rows[0].id : null;
+    } else if (stage.type === 'lobbies') {
+      const tot = {};
+      stage.entrants.forEach((id) => (tot[id] = { id: id, total: 0, best: 0, played: 0 }));
+      R.rounds = stage.data.rounds.map((rd, ri) => {
+        const heats = rd.heats.map((h) => {
+          const st = lobbyStanding(h, stage.results[h.id]);
+          st.rows.forEach((r) => {
+            if (r.total == null || !tot[r.id]) return;
+            tot[r.id].total += r.total;
+            tot[r.id].best = Math.max(tot[r.id].best, r.total);
+            tot[r.id].played++;
+          });
+          return Object.assign({}, h, st, { lobby: true });
+        });
+        return { index: ri, heats: heats, complete: heats.every((h) => h.complete), name: stage.data.rounds.length > 1 ? `Omgång ${ri + 1}` : 'Lobbyer' };
+      });
+      R.done = R.rounds.every((rd) => rd.complete);
+      const table = Object.values(tot).sort((a, b) => b.total - a.total || b.best - a.best || seedIdx(a.id) - seedIdx(b.id));
+      const adv = cfg.advance > 0 ? Math.min(cfg.advance, table.length) : table.length;
+      table.forEach((r, i) => {
+        r.pos = i + 1;
+        r.status = !R.done ? 'active' : i < adv ? 'advanced' : 'out';
+      });
+      R.table = table;
+      R.placements = table.map((r) => [r.id]);
+      R.qualifiers = table.slice(0, adv).map((r) => r.id);
+      const stat = {};
+      table.forEach((r) => (stat[r.id] = r.status));
+      R.rounds.forEach((rd) => rd.heats.forEach((h) => h.rows.forEach((r) => (r.status = h.complete ? stat[r.id] : 'active'))));
     }
 
     // Delade placeringar sorteras på seedning
@@ -623,6 +705,11 @@
 
   function setHeatResult(stage, heatId, races) {
     stage.results[heatId] = { races: races };
+  }
+
+  /** Poäng per spelare i en lobby, t.ex. { id1: 54, id2: 41 } */
+  function setLobbyResult(stage, lobbyId, points) {
+    stage.results[lobbyId] = { points: points };
   }
 
   /**
@@ -699,9 +786,12 @@
     {
       id: 'mariokart',
       name: 'Mario Kart',
-      desc: 'Heat om 4 där topp 2 går vidare, runda efter runda fram till en final.',
+      desc: 'Poängfas i slumpade 1v1v1v1-lobbyer (spelets poäng, max 60). De 8 bästa går till heat om 4 där topp 2 går vidare till final.',
       mode: 'individual',
-      stages: [{ type: 'heats', name: 'Heatrundor', cfg: { heatSize: 4, advancePerHeat: 2, races: 1, points: MK_POINTS.join(', ') } }],
+      stages: [
+        { type: 'lobbies', name: 'Poängfas', cfg: { size: 4, rounds: 1, maxPoints: 60, advance: 8 } },
+        { type: 'heats', name: 'Heatrundor', cfg: { heatSize: 4, advancePerHeat: 2, races: 1, points: MK_POINTS.join(', ') } },
+      ],
     },
     {
       id: 'groups-playoff',
@@ -738,6 +828,8 @@
     resolve: resolve,
     setResult: setResult,
     setHeatResult: setHeatResult,
+    setLobbyResult: setLobbyResult,
+    splitLobbies: splitLobbies,
     progress: progress,
     isLocked: isLocked,
     winsNeeded: winsNeeded,
