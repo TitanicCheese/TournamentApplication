@@ -1,6 +1,11 @@
 // Offline-stöd när appen körs som webbapp (PWA)
+<<<<<<< HEAD
 const CACHE = 'turnering-v7';
 const FILES = ['./', './index.html', './styles.css', './logic.js', './stages.js', './stats.js', './vendor/anthropic-sdk.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
+=======
+const CACHE = 'turnering-v8';
+const FILES = ['./', './index.html', './styles.css', './logic.js', './stages.js', './stats.js', './vendor/anthropic-sdk.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './fonts/atkinson.woff2', './fonts/fraunces.woff2', './fonts/caveat.woff2'];
+>>>>>>> claude/android-tournament-app-ei2lq8
 
 self.addEventListener('install', (e) => {
   // reload hoppar över webbläsarens HTTP-cache, så att en ny version aldrig sparas med gamla filer

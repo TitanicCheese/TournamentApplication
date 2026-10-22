@@ -53,19 +53,23 @@ Välj spel när turneringen skapas eller under **Mer → Spel & statistik**. Då
 **Stats** upp:
 
 1. Ladda upp en skärmbild av scoreboarden efter en karta (från Stats-fliken eller direkt i en match).
-2. Claude läser av varje spelares siffror (t.ex. K, D, A, MVP, poäng, skada) och kopplar
+2. Mistral eller Claude läser av varje spelares siffror (t.ex. K, D, A, MVP, poäng, skada) och kopplar
    spelarnamnen till lagens spelarlistor, även med klantaggar.
 3. Du granskar och rättar siffrorna bredvid bilden och sparar.
 
 Topplistan räknar ihop alla kartor: totalsummor (kills, MVP), snitt (t.ex. ACS) och
 K/D, KDA och +/−. Sortera på valfri kolumn, filtrera på lag och sätt ett minsta antal kartor.
 
-Avläsningen använder Claude:
-- **Webbversionen på claude.ai:** via ditt Claude-konto, utan nyckel.
-- **Android-appen / HTML-filen:** lägg in en egen Claude API-nyckel under Mer. Nyckeln
-  sparas bara på enheten och följer inte med i säkerhetskopior.
-  Standardmodellen är Claude Haiku 5.5 (ca 1–2 öre per bild). Byt till `claude-opus-5-5`
-  under Mer om avläsningen behöver bli mer exakt (ca 40–70 öre per bild).
+Välj tjänst för avläsningen under **Mer → Spel & statistik**:
+- **Mistral (gratis, standard):** skapa ett gratiskonto på [console.mistral.ai](https://console.mistral.ai)
+  och en API-nyckel under **API Keys**. Inget betalkort behövs. Standardmodellen är
+  `ministral-14b-latest`, den största modellen på gratisplanen som kan läsa bilder. På
+  gratisplanen får Mistral använda bilderna för att förbättra sina modeller.
+- **Claude:** lägg in en egen Claude API-nyckel. Standardmodellen är Claude Haiku 5.5 (ca 1–2 öre
+  per bild). Byt till `claude-opus-5-5` om avläsningen behöver bli mer exakt (ca 40–70 öre per bild).
+- **Webbversionen på claude.ai:** använder ditt Claude-konto, utan nyckel.
+
+Nycklarna sparas bara på enheten och följer inte med i säkerhetskopior.
 
 Utan AI går det att fylla i siffrorna själv – spelarlistan fylls i automatiskt.
 

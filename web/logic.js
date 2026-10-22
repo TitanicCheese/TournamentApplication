@@ -345,6 +345,25 @@
     return groups;
   }
 
+  // Fält som alltid escapas när de visas. Alla andra strängar i en importerad fil
+  // (id:n, nycklar, inställningar, resultat) hamnar ibland rakt i HTML-attribut.
+  const FREE_TEXT = new Set(['name', 'members', 'label', 'note', 'desc', 'matchLabel', 'customStats', 'customGameName', 'quickValues', 'title']);
+  const HTML_CHARS = /[<>"'&`]/;
+
+  // Returnerar sökvägen till första osäkra strängen i en importerad säkerhetskopia, annars null.
+  // Används innan en import godkänns så att en ändrad fil inte kan köra skript i appen.
+  function findUnsafeImport(value, path, inFreeText) {
+    const at = (k) => (path ? path + '.' + k : String(k));
+    if (typeof value === 'string') return !inFreeText && HTML_CHARS.test(value) ? path : null;
+    if (!value || typeof value !== 'object') return null;
+    for (const k of Object.keys(value)) {
+      if (!Array.isArray(value) && HTML_CHARS.test(k)) return at(k);
+      const hit = findUnsafeImport(value[k], at(k), Array.isArray(value) ? inFreeText : FREE_TEXT.has(k));
+      if (hit) return hit;
+    }
+    return null;
+  }
+
   const api = {
     uid: uid,
     isNum: isNum,
@@ -363,6 +382,7 @@
     setResult: setResult,
     roundName: roundName,
     makeGroups: makeGroups,
+    findUnsafeImport: findUnsafeImport,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

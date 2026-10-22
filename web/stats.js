@@ -19,6 +19,7 @@
         { key: 'dmg', label: 'Skada', long: 'Total damage dealt', kind: 'sum' },
       ],
       hint: 'TAB-tavlan i slutet av kartan: namn, K, D, A, MVP-stjärnor (siffran vid stjärnan, ingen stjärna = 0), poäng och skada.',
+      read: 'MVP stars: a star with a number means that number, a star alone means 1, no star means 0. The team score is the rounds won.',
     },
     valorant: {
       name: 'Valorant',
@@ -34,6 +35,7 @@
         { key: 'defuses', label: 'Def', long: 'Spike defuses', kind: 'sum' },
       ],
       hint: 'Scoreboard efter matchen: ACS, K, D, A, Econ, First Bloods, Plants och Defuses.',
+      read: 'Kills, deaths and assists can be in one column as "K / D / A". The team score is the rounds won. At the top, the left score belongs to the team with green or teal rows and the right score to the team with red rows.',
     },
     lol: {
       name: 'LoL',
@@ -47,18 +49,20 @@
         { key: 'dmg', label: 'Skada', long: 'Damage to champions', kind: 'avg' },
       ],
       hint: 'Resultatskärmen efter matchen med KDA, CS, guld och skada.',
+      read: 'The KDA column is "kills/deaths/assists". League of Legends has no round score: set every team_score to -1. Numbers like "23,410" mean 23410.',
     },
     rl: {
       name: 'Rocket League',
       long: 'Rocket League',
       stats: [
-        { key: 'score', label: 'Poäng', long: 'Score', kind: 'sum' },
+        { key: 'score', label: 'Poäng', long: 'Player score', kind: 'sum' },
         { key: 'goals', label: 'Mål', long: 'Goals', kind: 'sum' },
         { key: 'assists', label: 'Assist', long: 'Assists', kind: 'sum' },
         { key: 'saves', label: 'Räddn.', long: 'Saves', kind: 'sum' },
         { key: 'shots', label: 'Skott', long: 'Shots', kind: 'sum' },
       ],
       hint: 'Scoreboard efter matchen: poäng, mål, assists, räddningar och skott.',
+      read: 'Player score is the SCORE column of each player. The team score is the goals the team scored.',
     },
   };
 
@@ -99,25 +103,32 @@
 
   /** Normaliserar ett namn för jämförelse (gemener, utan klantaggar/specialtecken). */
   function normName(s) {
-    return String(s || '')
-      .toLowerCase()
+    const raw = String(s || '').toLowerCase();
+    const n = raw
       .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
-      .replace(/[^a-z0-9]+/g, '');
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+    // Namn med bara symboler ska inte bli tomma och slås ihop med varandra
+    return n || raw.replace(/\s+/g, '');
   }
 
-  /** Hittar bästa namnet i en lista (exakt, sedan början/innehåller). */
+  /**
+   * Hittar bästa namnet i en lista: exakt träff, annars ett namn som börjar eller slutar likadant
+   * (avklippta namn eller lagtagg före namnet i skärmklipp), aldrig mitt i ett annat namn. Vid flera möjliga träffar returneras null.
+   */
   function matchName(name, candidates) {
     const n = normName(name);
     if (!n) return null;
-    let hit = candidates.find((c) => normName(c) === n);
+    const hit = candidates.find((c) => normName(c) === n);
     if (hit) return hit;
-    hit = candidates.find((c) => {
+    const near = candidates.filter((c) => {
       const m = normName(c);
-      return m.length >= 3 && (n.includes(m) || m.includes(n));
+      if (Math.min(m.length, n.length) < 3) return false;
+      const [short, long] = m.length < n.length ? [m, n] : [n, m];
+      return long.startsWith(short) || long.endsWith(short);
     });
-    return hit || null;
+    return near.length === 1 ? near[0] : null;
   }
 
   const num = (v) => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : null);
@@ -135,6 +146,19 @@
         const key = normName(row.name) + '|' + (row.teamId || '');
         const p = (players[key] = players[key] || { key: key, name: row.name, teamId: row.teamId || null, maps: 0, sums: {}, counts: {} });
         p.maps++;
+        // K/D, +/- och KDA räknas bara på kartor där både kills och deaths finns
+        const k = num(row.stats && row.stats.k), d = num(row.stats && row.stats.d), a = num(row.stats && row.stats.a);
+        if (k != null && d != null) {
+          p.kd = p.kd || { k: 0, d: 0, ka: 0, da: 0, a: 0, withA: 0 };
+          p.kd.k += k;
+          p.kd.d += d;
+          if (a != null) {
+            p.kd.ka += k;
+            p.kd.da += d;
+            p.kd.a += a;
+            p.kd.withA++;
+          }
+        }
         game.stats.forEach((s) => {
           const v = num(row.stats && row.stats[s.key]);
           if (v == null) return;
@@ -149,10 +173,10 @@
         if (!p.counts[s.key]) v[s.key] = null;
         else v[s.key] = s.kind === 'avg' ? r2(p.sums[s.key] / p.counts[s.key]) : r2(p.sums[s.key]);
       });
-      if (hasStat(game, 'k') && hasStat(game, 'd') && v.k != null && v.d != null) {
-        v.kd = r2(v.k / Math.max(1, v.d));
-        v.diff = v.k - v.d;
-        if (v.a != null) v.kda = r2((v.k + v.a) / Math.max(1, v.d));
+      if (hasStat(game, 'k') && hasStat(game, 'd') && p.kd) {
+        v.kd = r2(p.kd.k / Math.max(1, p.kd.d));
+        v.diff = p.kd.k - p.kd.d;
+        if (hasStat(game, 'a') && p.kd.withA) v.kda = r2((p.kd.ka + p.kd.a) / Math.max(1, p.kd.da));
       }
       return { key: p.key, name: p.name, teamId: p.teamId, maps: p.maps, values: v };
     });
@@ -176,10 +200,31 @@
   /* Avläsning av scoreboard                                             */
   /* ------------------------------------------------------------------ */
 
+  /**
+   * Fältnamnen som modellen ser för varje statistikfält, i samma ordning som game.stats.
+   * Beskrivande namn (t.ex. "kills", "mvp_stars") läses av säkrare än korta nycklar
+   * som "k" eller "score", som annars blandas ihop med lagets resultat.
+   */
+  function readKeys(game) {
+    const used = new Set();
+    return game.stats.map((s, i) => {
+      let k = String(s.long || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+      if (!/^[a-z]/.test(k) || used.has(k) || k === 'team_score') k = 'stat_' + (i + 1);
+      used.add(k);
+      return k;
+    });
+  }
+
   /** JSON-schema för strukturerat svar (alla fält krävs, -1 = syns inte). */
   function scoreboardSchema(game) {
+    const keys = readKeys(game);
     const statProps = {};
-    game.stats.forEach((s) => (statProps[s.key] = { type: 'number', description: s.long + ' (-1 if not shown)' }));
+    game.stats.forEach((s, i) => (statProps[keys[i]] = { type: 'number', description: s.long + ' (0 for an empty cell, -1 if the column is not on the scoreboard)' }));
     return {
       type: 'object',
       additionalProperties: false,
@@ -191,10 +236,10 @@
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['name', 'score', 'players'],
+            required: ['name', 'team_score', 'players'],
             properties: {
               name: { type: 'string', description: 'Team name as shown, or the tournament team it matches, else empty string' },
-              score: { type: 'number', description: 'Rounds/points won on this map (-1 if not shown)' },
+              team_score: { type: 'number', description: 'Rounds or goals this team won on this map (-1 if the game shows none)' },
               players: {
                 type: 'array',
                 items: {
@@ -204,7 +249,7 @@
                   properties: {
                     name: { type: 'string', description: 'In-game name exactly as shown' },
                     roster_name: { type: 'string', description: 'The matching roster name from the list given, or empty string' },
-                    stats: { type: 'object', additionalProperties: false, required: game.stats.map((s) => s.key), properties: statProps },
+                    stats: { type: 'object', additionalProperties: false, required: keys, properties: statProps },
                   },
                 },
               },
@@ -216,37 +261,65 @@
   }
 
   /**
-   * Instruktion till Claude. teams: [{name, members: [string]}] – de lag som
+   * Instruktion till AI-modellen. teams: [{name, members: [string]}] – de lag som
    * kan finnas på bilden (t.ex. de två lagen i matchen).
    */
   function scoreboardPrompt(game, teams, asJsonText) {
-    const statLines = game.stats.map((s) => `- "${s.key}": ${s.long}`).join('\n');
+    const keys = readKeys(game);
+    const statLines = game.stats.map((s, i) => `- "${keys[i]}": ${s.long}`).join('\n');
     const rosterLines = teams.length
       ? teams.map((t) => `- ${t.name}: ${(t.members || []).length ? t.members.join(', ') : '(no roster entered)'}`).join('\n')
       : '(no teams entered)';
     const example = {
       map: 'Mirage',
-      teams: [{ name: 'Team A', score: 13, players: [{ name: 'player1', roster_name: 'Player One', stats: Object.fromEntries(game.stats.map((s) => [s.key, 0])) }] }],
+      teams: [{ name: 'Team A', team_score: 13, players: [{ name: 'player1', roster_name: 'Player One', stats: Object.fromEntries(keys.map((k) => [k, 0])) }] }],
     };
     return (
       `The image is a screenshot of an end-of-match scoreboard from ${game.long}. ` +
       `Read every player row and return the statistics.\n\n` +
-      `Statistics to read for each player (numbers only, -1 when a value is not shown):\n${statLines}\n\n` +
-      `Percentages are plain numbers (45% -> 45). Values like "1.2k" mean 1200.\n\n` +
-      `Teams registered in this tournament with their player rosters:\n${rosterLines}\n\n` +
+      `Statistics to read for each player:\n${statLines}\n\n` +
+      `Rules for numbers:\n` +
+      `- Use the number in the player's own row and the matching column. Ignore columns that are not in the list.\n` +
+      `- An empty cell in a listed column means 0. Use -1 only when the column is not on the scoreboard at all.\n` +
+      `- Percentages are plain numbers (45% -> 45). "1.2k" means 1200. "23,410" means 23410.\n` +
+      (game.read ? `- ${game.read}\n` : '') +
+      `\nTeams registered in this tournament with their player rosters:\n${rosterLines}\n\n` +
       `Group players by the team they played for on the scoreboard. For each team, set "name" to the registered team it matches ` +
       `(compare the players with the rosters) or the name shown on screen. For each player, set "roster_name" to the roster entry ` +
       `that is the same person (in-game names often add clan tags or nicknames), or "" when none matches. ` +
-      `Set "score" to the rounds or points the team won on this map. Set "map" to the map name if it is shown.` +
+      `Set "team_score" to the rounds or goals the team won on this map. A team's score is the one shown in the same color, on the same side or ` +
+      `next to the same label as that team's rows. Set "map" to the map name if it is shown.` +
       (asJsonText ? `\n\nReply with only one JSON object shaped like this example, no other text:\n${JSON.stringify(example)}` : '')
     );
   }
 
   /**
-   * Gör om Claudes svar till kartdata. participants: [{id, name, members}]
+   * Förfrågan till Mistrals chat-API för en scoreboard-bild. image är en data-URL.
+   * Svaret är ett JSON-objekt enligt scoreboardSchema i choices[0].message.content.
+   */
+  function mistralRequest(game, teams, model, image) {
+    return {
+      model: model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: image },
+            { type: 'text', text: scoreboardPrompt(game, teams, false) },
+          ],
+        },
+      ],
+      response_format: { type: 'json_schema', json_schema: { name: 'scoreboard', schema: scoreboardSchema(game), strict: true } },
+    };
+  }
+
+  /**
+   * Gör om AI-modellens svar till kartdata. participants: [{id, name, members}]
    * – de lag som svaret ska kopplas till.
    */
   function normalizeReading(reading, game, participants) {
+    const keys = readKeys(game);
     const teams = Array.isArray(reading && reading.teams) ? reading.teams : [];
     const used = new Set();
     const pickTeam = (t) => {
@@ -270,7 +343,7 @@
     };
     const outTeams = teams.map((t) => {
       const pt = pickTeam(t);
-      return { teamId: pt ? pt.id : null, name: pt ? pt.name : String(t.name || ''), score: num(t.score) };
+      return { teamId: pt ? pt.id : null, name: pt ? pt.name : String(t.name || ''), score: num(t.team_score) };
     });
     // Lag som inte kunde kopplas får de lediga deltagarna i tur och ordning
     outTeams.forEach((t) => {
@@ -288,7 +361,7 @@
       (t.players || []).forEach((p) => {
         const rosterHit = pt ? matchName(p.roster_name || '', pt.members || []) || matchName(p.name || '', pt.members || []) : null;
         const stats = {};
-        game.stats.forEach((s) => (stats[s.key] = num(Number(p.stats && p.stats[s.key]))));
+        game.stats.forEach((s, i) => (stats[s.key] = num(Number(p.stats && p.stats[keys[i]]))));
         rows.push({ name: rosterHit || String(p.name || '').trim(), ingame: String(p.name || '').trim(), team: ti, stats: stats });
       });
     });
@@ -305,6 +378,8 @@
     sortBoard: sortBoard,
     scoreboardSchema: scoreboardSchema,
     scoreboardPrompt: scoreboardPrompt,
+    mistralRequest: mistralRequest,
+    readKeys: readKeys,
     normalizeReading: normalizeReading,
   };
 

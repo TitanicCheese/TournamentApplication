@@ -30,6 +30,8 @@
     upload: 'M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z',
     add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
     crown: 'M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z',
+    more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+    check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   };
   const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
 
@@ -93,7 +95,10 @@
 
   function normalizeDb(d) {
     if (!d || typeof d !== 'object' || !d.tournaments || typeof d.tournaments !== 'object') return null;
-    Object.values(d.tournaments).forEach(normalize);
+    Object.entries(d.tournaments).forEach(([id, t]) => {
+      t.id = id;
+      normalize(t);
+    });
     if (!Object.keys(d.tournaments).length) {
       const t = newTournament('Min turnering');
       d.tournaments[t.id] = t;
@@ -115,9 +120,22 @@
   let db = load();
   const T = () => db.tournaments[db.activeId];
 
+  // Ber webbläsaren att inte rensa sparad data på egen hand (t.ex. när lagringen blir full
+  // eller i Safari efter en tids inaktivitet). Firefox frågar användaren, så det görs bara
+  // när det finns riktiga turneringar att skydda.
+  let persistAsked = false;
+  function keepDataSafe() {
+    if (persistAsked || !navigator.storage || !navigator.storage.persist) return;
+    if (!Object.values(db.tournaments).some((x) => x.players.length)) return;
+    persistAsked = true;
+    navigator.storage.persist().catch(() => {});
+  }
+  keepDataSafe();
+
   function save() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      keepDataSafe();
     } catch (e) {
       toast('Kunde inte spara: ' + e.message);
     }
@@ -186,8 +204,9 @@
     if (isTeamMode(t)) {
       const size = t.settings.rosterSize;
       const n = (p.members || []).length;
-      const badge = size ? `<span class="roster ${n < size ? 'short' : ''}">${n}/${size}</span> ` : '';
-      return n || size ? `<div class="sub">${badge}${esc((p.members || []).join(', '))}</div>` : '';
+      if (!n && !size) return '';
+      const count = size ? ` <span class="${n < size ? 'short' : ''}">· ${n}/${size}</span>` : '';
+      return `<div class="sub">${n ? esc(p.members.join(', ')) : 'Inga spelare än'}${count}</div>`;
     }
     const team = p.teamId && teamById(t, p.teamId);
     return team ? `<div class="sub"><span class="team-tag"><i style="background:${esc(team.color)}"></i>${esc(team.name)}</span></div>` : '';
@@ -237,6 +256,26 @@
     toastTimer = setTimeout(() => (el.hidden = true), action ? 6000 : 2600);
   }
 
+  // Animerar höjden på el när innehållet (första barnet) byter storlek, t.ex. när ett fält visas
+  function smoothHeight(el) {
+    if (!window.ResizeObserver || !el.animate || !el.firstElementChild) return;
+    let last = 0;
+    new ResizeObserver(() => {
+      el.getAnimations().forEach((a) => a.cancel());
+      const h = el.getBoundingClientRect().height;
+      if (last && Math.abs(h - last) > 4 && !(reducedMotion && reducedMotion.matches)) {
+        el.animate([{ height: last + 'px', overflow: 'hidden' }, { height: h + 'px', overflow: 'hidden' }], { duration: 320, easing: 'cubic-bezier(.2, .7, .15, 1)' });
+      }
+      last = h;
+    }).observe(el.firstElementChild);
+  }
+
+  // Byter innehåll med en mjuk övergång där webbläsaren stödjer View Transitions
+  function smoothRender() {
+    if (document.startViewTransition && !(reducedMotion && reducedMotion.matches)) document.startViewTransition(render);
+    else render();
+  }
+
   const modalStack = [];
   function openModal(opts) {
     const wrap = document.createElement('div');
@@ -244,14 +283,18 @@
     wrap.innerHTML =
       `<div class="modal" role="dialog" aria-modal="true">` +
       `<div class="modal-head"><h2>${esc(opts.title)}</h2><button class="icon-btn" data-close aria-label="Stäng">${icon('close')}</button></div>` +
-      `<div class="modal-body">${opts.body || ''}</div>` +
+      `<div class="modal-body"><div>${opts.body || ''}</div></div>` +
       (opts.actions && opts.actions.length ? '<div class="modal-actions"></div>' : '') +
       `</div>`;
+    smoothHeight(wrap.querySelector('.modal-body'));
     let closed = false;
     const close = () => {
       if (closed) return;
       closed = true;
-      wrap.remove();
+      // Glid ut innan dialogen tas bort. Id:n tas bort direkt så att en ny dialog inte krockar.
+      wrap.classList.add('closing');
+      wrap.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+      setTimeout(() => wrap.remove(), 260);
       const i = modalStack.indexOf(close);
       if (i >= 0) modalStack.splice(i, 1);
       if (opts.onClose) opts.onClose();
@@ -412,7 +455,7 @@
     const dark = pref === 'dark' || (pref === 'auto' && media && media.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const meta = $('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? '#0b0b1d' : '#eef0ff';
+    if (meta) meta.content = dark ? '#141311' : '#ebe6de';
   }
   if (media && media.addEventListener) media.addEventListener('change', applyTheme);
 
@@ -421,9 +464,37 @@
     saveUi();
     render();
     window.scrollTo(0, 0);
+    fadeIn($('#view'));
   }
 
+  // Mjuk intoning av en vy vid flikbyte (hoppas över vid reducerad rörelse)
+  const reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function fadeIn(el) {
+    if (!el || !el.animate || (reducedMotion && reducedMotion.matches)) return;
+    el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, easing: 'cubic-bezier(.2, .7, .15, 1)' });
+  }
+
+  // Ytor som ändrar höjd när samma vy ritas om glider mjukt till sin nya höjd.
+  // Ytorna paras ihop i ordning och bara när klassnamnet är detsamma.
+  const MORPH = '.card, .list, .standings, .empty, .sb-team, details.cfg';
+  let lastView = '';
   function render() {
+    const view = $('#view');
+    const key = ui.wizard ? '' : db.activeId + ':' + ui.tab;
+    const animate = key && key === lastView && view.animate && !(reducedMotion && reducedMotion.matches);
+    const before = animate ? $$(MORPH, view).map((el) => ({ cls: el.className, h: el.getBoundingClientRect().height })) : [];
+    lastView = key;
+    drawView();
+    if (!before.length) return;
+    $$(MORPH, view).forEach((el, i) => {
+      const b = before[i];
+      const h = el.getBoundingClientRect().height;
+      if (!b || b.cls !== el.className || Math.abs(h - b.h) < 3) return;
+      el.animate([{ height: b.h + 'px', overflow: 'hidden' }, { height: h + 'px', overflow: 'hidden' }], { duration: 320, easing: 'cubic-bezier(.2, .7, .15, 1)' });
+    });
+  }
+
+  function drawView() {
     applyTheme();
     const t = T();
     $('#tName').textContent = t.name;
@@ -531,6 +602,8 @@
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
       if (!a) return;
+      // Ett tryck bredvid rutan ska bara bocka i, inte öppna redigeringen
+      if (a.dataset.action === 'edit' && e.target.closest('.check')) return;
       const id = a.dataset.id;
       if (a.dataset.action === 'pview') {
         ui.playersView = a.dataset.v;
@@ -547,9 +620,17 @@
     };
   }
 
+  // Spelare som redan visats i listan, så att bara nya tonas in
+  const shownPlayers = { tid: null, ids: new Set() };
+
   function fillPlayerList(t) {
+    if (shownPlayers.tid !== t.id) {
+      shownPlayers.tid = t.id;
+      shownPlayers.ids = new Set(t.players.map((p) => p.id));
+    }
     const ul = $('#playerList');
     if (!ul) return;
+    let fresh = 0;
     const q = ui.playerSearch.trim().toLowerCase();
     const list = t.players
       .map((p, i) => ({ p: p, i: i }))
@@ -562,18 +643,18 @@
       ? list
           .map(
             ({ p, i }) => `
-        <li class="${p.active === false ? 'inactive' : ''}">
+        <li tabindex="0" role="button" class="tap ${p.active === false ? 'inactive' : ''}${shownPlayers.ids.has(p.id) ? '' : ' new'}" data-action="edit" data-id="${p.id}"${shownPlayers.ids.has(p.id) ? '' : ` style="--n:${Math.min(fresh++, 12)}"`}>
           <span class="num">${i + 1}</span>
-          <div class="grow tap" data-action="edit" data-id="${p.id}">
+          <div class="grow">
             <div class="name">${esc(p.name)}</div>
             ${teamTag(t, p)}
           </div>
-          <label class="check" title="Aktiv"><input type="checkbox" data-action="toggle" data-id="${p.id}" ${p.active !== false ? 'checked' : ''}></label>
-          <button class="icon-btn" data-action="edit" data-id="${p.id}" aria-label="Redigera">${icon('edit')}</button>
+          <label class="check" title="Med i tabellen"><input type="checkbox" data-action="toggle" data-id="${p.id}" aria-label="${esc(p.name)} är med i tabellen" ${p.active !== false ? 'checked' : ''}></label>
         </li>`
           )
           .join('')
       : `<li class="muted">Inget matchar sökningen</li>`;
+    t.players.forEach((p) => shownPlayers.ids.add(p.id));
   }
 
   function bulkAddDialog(t) {
@@ -751,7 +832,7 @@
             .map((team) => {
               const members = t.players.filter((p) => p.teamId === team.id);
               const names = members.slice(0, 5).map((p) => p.name).join(', ') + (members.length > 5 ? ' …' : '');
-              return `<li class="tap" data-action="editTeam" data-id="${team.id}">
+              return `<li tabindex="0" role="button" class="tap" data-action="editTeam" data-id="${team.id}">
                 <span class="team-swatch" style="background:${esc(team.color)}"></span>
                 <div class="grow"><div class="name">${esc(team.name)}</div><div class="sub">${members.length} spelare${names ? ' · ' + esc(names) : ''}</div></div>
                 ${icon('edit')}
@@ -1050,7 +1131,8 @@
   }
 
   function addRound(t) {
-    const n = t.rounds.length + 1;
+    let n = t.rounds.length + 1;
+    while (t.rounds.some((x) => x.name === 'Omgång ' + n)) n++;
     const r = { id: L.uid(), name: 'Omgång ' + n, scores: {} };
     t.rounds.push(r);
     ui.roundId = r.id;
@@ -1190,7 +1272,7 @@
       }
       const mv = r.move > 0 ? `<span class="move up">▲${r.move}</span>` : r.move < 0 ? `<span class="move down">▼${-r.move}</span>` : '';
       body += `
-        <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
+        <tr tabindex="0" class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
           <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
           <td class="l"><div class="pname">${esc(r.name)}${mv}</div>${clubLine(t, r.player)}</td>
           <td>${r.played}</td>
@@ -1237,7 +1319,7 @@
       }
       const mv = r.move > 0 ? `<span class="move up">▲${r.move}</span>` : r.move < 0 ? `<span class="move down">▼${-r.move}</span>` : '';
       body += `
-        <tr class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
+        <tr tabindex="0" class="tap r${r.rank} ${cutoff && i >= cutoff ? 'out' : ''}" data-id="${r.id}">
           <td class="rank"><span>${r.tied ? '=' : ''}${r.rank}</span></td>
           <td class="l"><div class="pname">${teamDot(r.team)}${esc(r.name)}${mv}</div></td>
           <td>${r.size}</td>
@@ -1599,29 +1681,8 @@
   /* ------------------------------- Mer ------------------------------ */
 
   function renderMore(view, t) {
-    const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt);
     view.innerHTML = `
-      <div class="section-title">Turneringar</div>
-      <ul class="list">
-        ${list
-          .map(
-            (x) => `
-          <li class="tap ${x.id === db.activeId ? 'current' : ''}" data-action="switch" data-id="${x.id}">
-            <div class="grow"><div class="name">${esc(x.name)}</div>
-            <div class="sub">${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}${x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`}</div></div>
-            ${x.id === db.activeId ? '<span class="small" style="color:var(--primary);font-weight:700">AKTIV</span>' : ''}
-          </li>`
-          )
-          .join('')}
-      </ul>
-      <div class="row wrap" style="margin-top:10px">
-        <button class="btn small primary" data-action="newT">${icon('add')}Ny turnering</button>
-        <button class="btn small" data-action="renameT">Byt namn</button>
-        <button class="btn small" data-action="copyT">Kopiera ${W(t).one} till ny</button>
-        <button class="btn small danger-text" data-action="deleteT">Ta bort</button>
-      </div>
-
-      <div class="section-title">Typ av turnering (${esc(t.name)})</div>
+      <div class="section-title">Typ av turnering</div>
       <section class="card">
         <div class="seg" style="margin-bottom:8px">
           <button data-action="mode" data-v="individual" class="${!isTeamMode(t) ? 'on' : ''}">Individuell</button>
@@ -1638,12 +1699,12 @@
 
       <div class="section-title">Verktyg</div>
       <ul class="list">
-        <li class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
-        <li class="tap" data-action="groups">${icon('shuffle')}<div class="grow"><div class="name">Lottning & grupper</div><div class="sub">Slumpa par eller dela in i grupper</div></div></li>
-        <li class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="timer">${icon('timer')}<div class="grow"><div class="name">Matchtimer</div><div class="sub">Nedräkning med larm</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="groups">${icon('shuffle')}<div class="grow"><div class="name">Lottning & grupper</div><div class="sub">Slumpa par eller dela in i grupper</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="random">${icon('dice')}<div class="grow"><div class="name">Slumpa ${isTeamMode(t) ? 'ett lag' : 'en spelare'}</div><div class="sub">T.ex. vem som börjar</div></div></li>
       </ul>
 
-      ${isStages(t) ? '' : `<div class="section-title">Poängräkning (${esc(t.name)})</div>
+      ${isStages(t) ? '' : `<div class="section-title">Poängräkning</div>
       <section class="card">
         <label class="field"><span>Räkna bara bästa X omgångar (0 = alla)</span><input type="number" min="0" id="setBestOf" value="${t.settings.bestOf || 0}"></label>
         <label class="field"><span>Snabbknappar för poäng (t.ex. 3, 1, 0)</span><input type="text" id="setQuick" value="${esc(t.settings.quickValues)}" placeholder="Tomt = inga snabbknappar"></label>
@@ -1661,15 +1722,15 @@
 
       <div class="section-title">Data & säkerhetskopia</div>
       <ul class="list">
-        <li class="tap" data-action="export">${icon('download')}<div class="grow"><div class="name">Exportera säkerhetskopia</div><div class="sub">Alla turneringar som JSON-fil</div></div></li>
-        <li class="tap" data-action="import">${icon('upload')}<div class="grow"><div class="name">Importera säkerhetskopia</div><div class="sub">Från fil eller inklistrad text</div></div></li>
-        <li class="tap" data-action="csv">${icon('chart')}<div class="grow"><div class="name">Exportera tabell (CSV)</div><div class="sub">Öppnas i Excel / Google Kalkylark</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="export">${icon('download')}<div class="grow"><div class="name">Exportera säkerhetskopia</div><div class="sub">Alla turneringar som JSON-fil</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="import">${icon('upload')}<div class="grow"><div class="name">Importera säkerhetskopia</div><div class="sub">Från fil eller inklistrad text</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-action="csv">${icon('chart')}<div class="grow"><div class="name">Exportera tabell (CSV)</div><div class="sub">Öppnas i Excel / Google Kalkylark</div></div></li>
       </ul>
 
       <div class="section-title">Utseende</div>
       <section class="card">
         <div class="seg" style="margin:0">
-          ${[['auto', 'Automatiskt'], ['light', 'Ljust'], ['dark', 'Mörkt']]
+          ${[['auto', 'Auto'], ['light', 'Ljust'], ['dark', 'Mörkt']]
             .map(([v, l]) => `<button data-action="theme" data-v="${v}" class="${db.settings.theme === v ? 'on' : ''}">${l}</button>`)
             .join('')}
         </div>
@@ -1681,25 +1742,13 @@
       const a = e.target.closest('[data-action]');
       if (!a) return;
       switch (a.dataset.action) {
-        case 'switch':
-          if (a.dataset.id !== db.activeId) {
-            db.activeId = a.dataset.id;
-            ui.roundId = null;
-            ui.stageIdx = null;
-            poDraft = null;
-            commit(`Bytte till ${T().name}`);
-          }
-          break;
-        case 'newT':
-          newTournamentDialog();
-          break;
         case 'clearKey':
-          try {
-            localStorage.removeItem(KEY_STORE);
-          } catch (err) {
-            /* ignorera */
-          }
+          store(PROVIDERS[getProvider()].keyStore, '');
           commit('API-nyckeln är borttagen');
+          break;
+        case 'aiProvider':
+          store(PROVIDER_STORE, a.dataset.v);
+          commit(`Avläsning med ${PROVIDERS[a.dataset.v].name}`);
           break;
         case 'changeFormat':
           presetPicker((p) => {
@@ -1720,46 +1769,6 @@
             poDraft = null;
             commit(isTeamMode(t) ? 'Nu är det en lagturnering' : 'Nu är det en individuell turnering');
           }
-          break;
-        case 'renameT':
-          promptDialog('Byt namn på turnering', 'Namn', t.name, (v) => {
-            t.name = v;
-            commit('Sparat');
-          });
-          break;
-        case 'copyT':
-          promptDialog(`Ny turnering med samma ${W(t).one}`, 'Namn', t.name + ' (2)', (v) => {
-            const nt = newTournament(v, t.mode);
-            nt.players = t.players.map((p) => {
-              const c = { id: L.uid(), name: p.name, active: true };
-              if (p.teamId) c.teamId = p.teamId;
-              if (p.members) c.members = p.members.slice();
-              return c;
-            });
-            nt.teams = t.teams.map((x) => Object.assign({}, x));
-            nt.settings = Object.assign({}, t.settings);
-            nt.format = t.format;
-            nt.presetId = t.presetId;
-            nt.stages = t.stages.map((s) => {
-              const c = SG.newStage(s.type, s.name);
-              c.cfg = Object.assign({}, s.cfg);
-              return c;
-            });
-            db.tournaments[nt.id] = nt;
-            db.activeId = nt.id;
-            ui.roundId = null;
-            poDraft = null;
-            commit(`${v} skapad med ${nt.players.length} ${W(nt).one}`);
-          });
-          break;
-        case 'deleteT':
-          confirmDialog('Ta bort turnering?', `"${t.name}" med alla spelare, poäng och slutspel tas bort.`, 'Ta bort', () => {
-            checkpoint();
-            delete db.tournaments[t.id];
-            normalizeDb(db);
-            ui.roundId = null;
-            commit(`${t.name} borttagen`, true);
-          });
           break;
         case 'timer':
           timerDialog();
@@ -1809,19 +1818,11 @@
       } else if (id === 'setApiKey') {
         const v = e.target.value.trim();
         if (v && !v.startsWith('••')) {
-          try {
-            localStorage.setItem(KEY_STORE, v);
-          } catch (err) {
-            /* ignorera */
-          }
+          store(PROVIDERS[getProvider()].keyStore, v);
           commit('API-nyckeln är sparad på den här enheten');
         }
       } else if (id === 'setModel') {
-        try {
-          localStorage.setItem(MODEL_STORE, e.target.value.trim() || DEFAULT_MODEL);
-        } catch (err) {
-          /* ignorera */
-        }
+        store(PROVIDERS[getProvider()].modelStore, e.target.value.trim());
         commit('Modell sparad');
       } else if (id === 'setRoster') {
         t.settings.rosterSize = Math.max(0, Math.round(Number(e.target.value) || 0));
@@ -1838,6 +1839,113 @@
 
   function newTournamentDialog() {
     startWizard();
+  }
+
+  const tournamentSub = (x) =>
+    `${x.format === 'stages' ? esc(presetName(x)) + ' · ' : x.mode === 'team' ? 'Lagturnering · ' : ''}${x.players.length} ${W(x).one}` +
+    (x.format === 'stages' ? '' : ` · ${x.rounds.length} ${x.rounds.length === 1 ? 'omgång' : 'omgångar'}${x.playoff ? ' · slutspel' : ''}`);
+
+  function switchTournament(id) {
+    if (id === db.activeId) return;
+    db.activeId = id;
+    ui.roundId = null;
+    ui.stageIdx = null;
+    poDraft = null;
+    commit(`Bytte till ${T().name}`);
+  }
+
+  /** Turneringslistan bakom titeln: tryck för att byta, ⋯ för att döpa om, kopiera eller ta bort. */
+  function tournamentSheet() {
+    const sheet = openModal({
+      title: 'Turneringar',
+      body: '<ul class="list t-list" id="tList"></ul>',
+      actions: [{ label: 'Ny turnering', cls: 'primary block', onClick: () => startWizard() }],
+    });
+    const draw = () => {
+      const el = $('.t-list', sheet.el);
+      if (!el) return;
+      el.innerHTML = Object.values(db.tournaments)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(
+          (x) => `<li tabindex="0" role="button" class="tap ${x.id === db.activeId ? 'current' : ''}" data-tid="${x.id}">
+            <span class="t-mark">${x.id === db.activeId ? icon('check') : ''}</span>
+            <div class="grow"><div class="name">${esc(x.name)}</div><div class="sub">${tournamentSub(x)}</div></div>
+            <button class="icon-btn" data-tmenu="${x.id}" aria-label="Fler val för ${esc(x.name)}">${icon('more')}</button>
+          </li>`
+        )
+        .join('');
+    };
+    draw();
+    sheet.el.addEventListener('click', (e) => {
+      const menu = e.target.closest('[data-tmenu]');
+      if (menu) return tournamentMenu(db.tournaments[menu.dataset.tmenu], draw, sheet.close);
+      const row = e.target.closest('[data-tid]');
+      if (!row) return;
+      switchTournament(row.dataset.tid);
+      sheet.close();
+    });
+  }
+
+  /**
+   * Val för en turnering i listan. redraw ritar om listan efter en ändring.
+   * closeSheet stänger listan; det görs vid borttagning så att Ångra inte lämnar en inaktuell lista.
+   */
+  function tournamentMenu(x, redraw, closeSheet) {
+    const m = openModal({
+      title: x.name,
+      body: `<ul class="list">
+        <li tabindex="0" role="button" class="tap" data-m="rename">${icon('edit')}<div class="grow"><div class="name">Byt namn</div></div></li>
+        <li tabindex="0" role="button" class="tap" data-m="copy">${icon('people')}<div class="grow"><div class="name">Kopiera till ny turnering</div><div class="sub">Samma ${W(x).one}, format och inställningar</div></div></li>
+        <li tabindex="0" role="button" class="tap danger-row" data-m="delete">${icon('del')}<div class="grow"><div class="name">Ta bort</div></div></li>
+      </ul>`,
+    });
+    m.el.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-m]');
+      if (!row) return;
+      m.close();
+      if (row.dataset.m === 'rename') {
+        promptDialog('Byt namn på turnering', 'Namn', x.name, (v) => {
+          x.name = v;
+          commit('Sparat');
+          redraw();
+        });
+      } else if (row.dataset.m === 'copy') {
+        promptDialog(`Ny turnering med samma ${W(x).one}`, 'Namn', x.name + ' (2)', (v) => {
+          const nt = newTournament(v, x.mode);
+          nt.players = x.players.map((p) => {
+            const c = { id: L.uid(), name: p.name, active: true };
+            if (p.teamId) c.teamId = p.teamId;
+            if (p.members) c.members = p.members.slice();
+            return c;
+          });
+          nt.teams = x.teams.map((tm) => Object.assign({}, tm));
+          nt.settings = Object.assign({}, x.settings);
+          nt.format = x.format;
+          nt.presetId = x.presetId;
+          nt.stages = x.stages.map((st) => {
+            const c = SG.newStage(st.type, st.name);
+            c.cfg = Object.assign({}, st.cfg);
+            return c;
+          });
+          db.tournaments[nt.id] = nt;
+          db.activeId = nt.id;
+          ui.roundId = null;
+          poDraft = null;
+          commit(`${v} skapad med ${nt.players.length} ${W(nt).one}`);
+          redraw();
+        });
+      } else {
+        confirmDialog('Ta bort turnering?', `"${x.name}" med alla ${W(x).one}, poäng och slutspel tas bort.`, 'Ta bort', () => {
+          checkpoint();
+          const wasActive = x.id === db.activeId;
+          delete db.tournaments[x.id];
+          normalizeDb(db);
+          if (wasActive) ui.roundId = null;
+          closeSheet();
+          commit(`${x.name} borttagen`, true);
+        });
+      }
+    });
   }
 
   function dateStamp() {
@@ -1913,9 +2021,14 @@
       toast('Filen är inte en giltig säkerhetskopia');
       return;
     }
+    if (L.findUnsafeImport(data)) {
+      toast('Filen innehåller ogiltiga tecken och importerades inte');
+      return;
+    }
     // Stöd både hela databasen och en enskild turnering
     if (data && Array.isArray(data.players) && !data.tournaments) {
-      data = { tournaments: { [data.id || L.uid()]: data }, activeId: data.id };
+      const id = data.id || L.uid();
+      data = { tournaments: { [id]: data }, activeId: id };
     }
     const incoming = normalizeDb(data);
     if (!incoming) {
@@ -2080,8 +2193,9 @@
             const d = Number(b.dataset.adj);
             if (timer.running) timer.endAt = Math.max(Date.now() + 1000, timer.endAt + d);
             else {
+              // Före start ändras också längden som Nollställ går tillbaka till
+              if (!timer.done && timer.remaining === timer.duration) timer.duration = Math.max(1000, timer.duration + d);
               timer.remaining = Math.max(1000, timer.remaining + d);
-              timer.duration = Math.max(1000, timer.duration + d);
               timer.done = false;
             }
             timerTick();
@@ -2326,6 +2440,7 @@
             <span class="stage-no">${i + 1}</span>
             <div class="grow"><h3 style="margin:0">${esc(st.name)}</h3><div class="small muted">${esc(SG.TYPES[st.type].label)}</div></div>
             <span class="pill ${pill}">${status}</span>
+            <button class="icon-btn" data-action="stageMenu" data-i="${i}" aria-label="Fler val för ${esc(st.name)}">${icon('more')}</button>
           </div>
           <p class="small" style="margin:8px 0 0">${esc(stageSummary(st))}</p>
           ${st.status === 'setup' ? stageConfigForm(t, st, i) : ''}
@@ -2334,11 +2449,6 @@
           <div class="row wrap" style="margin-top:12px">
             ${st.status === 'setup' && canStart(t, i) ? `<button class="btn primary" data-action="startStage" data-i="${i}">${icon('trophy')}Starta ${esc(st.name.toLowerCase())}</button>` : ''}
             ${st.status !== 'setup' ? `<button class="btn small" data-action="openStage" data-i="${i}">Visa ${R && R.done ? 'resultat' : 'bracket'}</button>` : ''}
-            ${st.status !== 'setup' ? `<button class="btn small danger-text" data-action="resetStage" data-i="${i}">Återställ fas</button>` : ''}
-            ${st.status === 'setup' ? `
-              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="-1" aria-label="Flytta upp" ${i === 0 ? 'disabled' : ''}>▲</button>
-              <button class="icon-btn" data-action="moveStage" data-i="${i}" data-d="1" aria-label="Flytta ner" ${i === t.stages.length - 1 ? 'disabled' : ''}>▼</button>
-              <button class="btn small ghost danger-text" data-action="delStage" data-i="${i}">${icon('del')}Ta bort fas</button>` : ''}
           </div>
         </section>`;
     });
@@ -2349,10 +2459,34 @@
 
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
-      if (!a) return;
-      const i = Number(a.dataset.i);
+      if (a) stageAction(a.dataset.action, Number(a.dataset.i), a.dataset);
+    };
+
+    // Val i ⋯-menyn för en fas: flytta, ta bort eller återställa
+    function stageMenu(i) {
       const st = t.stages[i];
-      switch (a.dataset.action) {
+      const setup = st.status === 'setup';
+      const canUp = setup && i > 0 && t.stages[i - 1].status === 'setup';
+      const canDown = setup && i < t.stages.length - 1;
+      const item = (act, ic, label, extra) => `<li tabindex="0" role="button" class="tap ${act === 'delStage' || act === 'resetStage' ? 'danger-row' : ''}" data-m="${act}" ${extra || ''}>${icon(ic)}<div class="grow"><div class="name">${label}</div></div></li>`;
+      const rows = setup
+        ? (canUp ? item('moveStage', 'upload', 'Flytta upp', 'data-d="-1"') : '') + (canDown ? item('moveStage', 'download', 'Flytta ner', 'data-d="1"') : '') + item('delStage', 'del', 'Ta bort fas')
+        : item('resetStage', 'del', 'Återställ fas');
+      const m = openModal({ title: st.name, body: `<ul class="list">${rows}</ul>` });
+      m.el.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-m]');
+        if (!row) return;
+        m.close();
+        stageAction(row.dataset.m, i, row.dataset);
+      });
+    }
+
+    function stageAction(action, i, data) {
+      const st = t.stages[i];
+      switch (action) {
+        case 'stageMenu':
+          stageMenu(i);
+          break;
         case 'preset':
           presetPicker((p) => {
             const go = () => {
@@ -2374,7 +2508,7 @@
           commit('Fasen borttagen', true);
           break;
         case 'moveStage': {
-          const j = i + Number(a.dataset.d);
+          const j = i + Number(data.d);
           if (j < 0 || j >= t.stages.length || t.stages[j].status !== 'setup') return;
           [t.stages[i], t.stages[j]] = [t.stages[j], t.stages[i]];
           t.presetId = 'custom';
@@ -2383,7 +2517,7 @@
         }
         case 'startStage': {
           const seeds = seedsFor(t, i);
-          const problem = startProblem(st, seeds.length);
+          const problem = SG.startProblem(st, seeds.length);
           if (problem) {
             toast(problem);
             return;
@@ -2412,8 +2546,8 @@
         case 'seedUp':
         case 'seedDown': {
           const seeds = seedsFor(t, i).slice();
-          const k = Number(a.dataset.k);
-          const j = k + (a.dataset.action === 'seedUp' ? -1 : 1);
+          const k = Number(data.k);
+          const j = k + (action === 'seedUp' ? -1 : 1);
           if (j < 0 || j >= seeds.length) return;
           [seeds[k], seeds[j]] = [seeds[j], seeds[k]];
           st.customSeeds = seeds;
@@ -2447,15 +2581,6 @@
       t.presetId = t.presetId === 'league' ? 'custom' : t.presetId;
       commit();
     };
-  }
-
-  function startProblem(st, n) {
-    const c = st.cfg;
-    if (st.type === 'heats' && c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än heatstorleken';
-    if (st.type === 'double' && n < 3) return 'Dubbelutslagning kräver minst 3 deltagare';
-    if (st.type === 'swiss' && n < 4) return 'Swiss kräver minst 4 deltagare';
-    if ((st.type === 'gsl' || st.type === 'rr') && c.groups < 1) return 'Minst 1 grupp';
-    return '';
   }
 
   function cfgField(i, key, label, value, opts) {
@@ -2644,7 +2769,8 @@
     return `<div class="banner">${icon('trophy')}<div class="grow"><b>${esc(t.stages[i].name)} är klar!</b><div class="small">${R.qualifiers.length} går vidare till ${esc(next.name)}.</div></div><button class="btn small primary" data-action="goFormat">Till nästa fas</button></div>`;
   }
 
-  function matchLine(t, m, i) {
+  // inGroup: matchen visas i sitt gruppkort, så gruppnamnet behövs inte
+  function matchLine(t, m, i, inGroup) {
     const name = (id, side) => {
       if (id) return esc(pname(t, id));
       return m.state === 'bye' ? '<i class="muted">Walk over</i>' : '<span class="muted">-</span>';
@@ -2652,7 +2778,7 @@
     const cls = (id) => (m.winner && id === m.winner ? 'win' : m.winner && id ? 'lose' : '');
     const score = (v) => (v != null ? fmt(v) : '');
     return `<button class="mline ${m.state}" data-action="match" data-i="${i}" data-id="${m.id}">
-      <span class="mline-meta">${esc(m.groupName ? m.groupName + ' · ' : '')}${esc(m.label || '')}${m.bo ? ` · ${boText(m.bo)}` : ''}</span>
+      <span class="mline-meta">${esc(m.groupName && !inGroup ? m.groupName + ' · ' : '')}${esc(m.label || '')}${m.bo ? ` · ${boText(m.bo)}` : ''}</span>
       <span class="mline-row ${cls(m.a)}"><span class="pn">${name(m.a)}</span><span class="ps">${score(m.sa)}</span></span>
       <span class="mline-row ${cls(m.b)}"><span class="pn">${name(m.b)}</span><span class="ps">${score(m.sb)}</span></span>
       ${m.draw ? '<span class="mline-meta">Oavgjort</span>' : ''}
@@ -3046,7 +3172,12 @@
                       `<tr class="${r.status}"><td class="l">${r.pos}</td><td class="l">${esc(pname(t, r.id))}</td><td>${r.played}</td><td>${r.w}</td>${st.cfg.allowDraw ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td>${r.mf - r.ma > 0 ? '+' : ''}${r.mf - r.ma}</td><td><b>${r.pts}</b></td></tr>`
                   )
                   .join('')}</tbody></table>`;
-          return `<section class="card group-card"><h3>${esc(g.name)}</h3>${table}<div class="mlist compact">${g.matches.map((m) => matchLine(t, m, i)).join('')}</div></section>`;
+          // Matcher där inget lag är klart än blir en rad i stället för tomma kort
+          const known = g.matches.filter((m) => m.a || m.b);
+          const later = g.matches.filter((m) => !m.a && !m.b);
+          return `<section class="card group-card"><h3>${esc(g.name)}</h3>${table}<div class="mlist compact">${known.map((m) => matchLine(t, m, i, true)).join('')}</div>${
+            later.length ? `<p class="mlist-later">Sedan: ${later.map((m) => esc(m.label)).join(', ')}</p>` : ''
+          }</section>`;
         })
         .join('')}</div>`;
       html += `<p class="small muted" style="text-align:center">Grönt = vidare · Rött = utslagen</p>`;
@@ -3292,29 +3423,44 @@
   /* ------------------------------------------------------------------ */
 
   const ST = window.TStats;
-  const KEY_STORE = 'turneringsapp.apikey';
-  const MODEL_STORE = 'turneringsapp.aimodel';
-  const DEFAULT_MODEL = 'claude-haiku-5-5';
-  // Modeller där servern kan köra om en nekad förfrågan på en annan modell
+  // Två sätt att läsa av med egen nyckel: Mistral (gratisplan, standard) eller Claude (betalt).
+  // Nyckel och modell sparas per tjänst, bara på enheten och inte i säkerhetskopior.
+  const PROVIDERS = {
+    // Största modellen på Mistrals gratisplan som läser bilder; small och medium kräver betalplan
+    mistral: { name: 'Mistral', keyStore: 'turneringsapp.mistralkey', modelStore: 'turneringsapp.mistralmodel', model: 'ministral-14b-latest' },
+    claude: { name: 'Claude', keyStore: 'turneringsapp.apikey', modelStore: 'turneringsapp.aimodel', model: 'claude-haiku-5-5' },
+  };
+  const PROVIDER_STORE = 'turneringsapp.aiprovider';
+  const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
+  // Claude-modeller där servern kan köra om en nekad förfrågan på en annan modell
   const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5', 'claude-fable-5-1'];
 
-  const getApiKey = () => {
+  const stored = (k) => {
     try {
-      return localStorage.getItem(KEY_STORE) || '';
+      return localStorage.getItem(k) || '';
     } catch (e) {
       return '';
     }
   };
-  const getModel = () => {
+  const store = (k, v) => {
     try {
-      return localStorage.getItem(MODEL_STORE) || DEFAULT_MODEL;
+      if (v) localStorage.setItem(k, v);
+      else localStorage.removeItem(k);
     } catch (e) {
-      return DEFAULT_MODEL;
+      /* ignorera */
     }
   };
+  // Vald tjänst. Den som bara har en Claude-nyckel sedan tidigare fortsätter med Claude.
+  const getProvider = () => {
+    const p = stored(PROVIDER_STORE);
+    if (PROVIDERS[p]) return p;
+    return stored(PROVIDERS.claude.keyStore) && !stored(PROVIDERS.mistral.keyStore) ? 'claude' : 'mistral';
+  };
+  const getApiKey = (p) => stored(PROVIDERS[p || getProvider()].keyStore);
+  const getModel = (p) => stored(PROVIDERS[p || getProvider()].modelStore) || PROVIDERS[p || getProvider()].model;
   const gameOf = (t) => ST.gameFor(t.settings);
 
-  // Vilket sätt att läsa av bilder som finns: claude.ai-sidans Claude, egen API-nyckel eller inget
+  // Vilket sätt att läsa av bilder som finns: claude.ai-sidans Claude, egen nyckel till vald tjänst eller inget
   let readerPromise = null;
   function aiReader() {
     if (readerPromise) return readerPromise;
@@ -3337,7 +3483,8 @@
   async function readerKind() {
     const r = await aiReader();
     if (r) return r;
-    if (getApiKey() && window.AnthropicSDK) return { kind: 'api' };
+    const p = getProvider();
+    if (getApiKey(p) && (p !== 'claude' || window.AnthropicSDK)) return { kind: p };
     return null;
   }
 
@@ -3387,7 +3534,52 @@
     });
   }
 
-  /** Läser av en scoreboard med Claude och returnerar ett utkast att granska. */
+  /** Läser av med Mistral. Försöker en gång till efter tillfälliga fel (för många anrop, serverfel, trasigt svar). */
+  async function readWithMistral(game, teams, file, signal) {
+    try {
+      return await mistralOnce(game, teams, file, signal);
+    } catch (e) {
+      if (!['rate_limited', 'upstream_error', 'invalid_json'].includes(e && e.code)) throw e;
+      await new Promise((r) => setTimeout(r, 2000));
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      return mistralOnce(game, teams, file, signal);
+    }
+  }
+
+  /** Skickar bilden till Mistral och returnerar svaret som följer schemat. Fel kastas som { code }. */
+  async function mistralOnce(game, teams, file, signal) {
+    const image = await imageToBase64(file);
+    const body = ST.mistralRequest(game, teams, getModel('mistral'), 'data:' + image.mediaType + ';base64,' + image.data);
+    let res;
+    try {
+      res = await fetch(MISTRAL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getApiKey('mistral') },
+        body: JSON.stringify(body),
+        signal: signal,
+      });
+    } catch (e) {
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      throw { code: 'offline' };
+    }
+    if (res.status === 401 || res.status === 403) throw { code: 'bad_key' };
+    if (res.status === 429) throw { code: 'rate_limited' };
+    if (res.status === 400 || res.status === 404 || res.status === 422) throw { code: 'bad_request' };
+    if (!res.ok) throw { code: 'upstream_error' };
+    let text = '';
+    try {
+      const choice = (await res.json()).choices[0];
+      if (choice.finish_reason === 'length') throw new Error('length');
+      const content = choice.message.content;
+      text = Array.isArray(content) ? content.map((c) => c.text || '').join('') : String(content);
+      return JSON.parse(text);
+    } catch (e) {
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      throw { code: 'invalid_json' };
+    }
+  }
+
+  /** Läser av en scoreboard och returnerar ett utkast att granska. */
   async function readScoreboard(t, file, participants, signal) {
     const game = gameOf(t);
     const reader = await readerKind();
@@ -3396,62 +3588,69 @@
     let reading;
     if (reader.kind === 'sample') {
       reading = await reader.sample.json(ST.scoreboardPrompt(game, teams, true), { images: [file], signal: signal, cache: false });
+    } else if (reader.kind === 'claude') {
+      reading = await readWithClaude(game, teams, file, signal);
     } else {
-      const Anthropic = window.AnthropicSDK.default || window.AnthropicSDK;
-      const client = new Anthropic({ apiKey: getApiKey(), dangerouslyAllowBrowser: true });
-      const image = await imageToBase64(file);
-      const model = getModel();
-      const params = {
-        model: model,
-        max_tokens: 16000,
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: ST.scoreboardSchema(game) } },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
-              { type: 'text', text: ST.scoreboardPrompt(game, teams, false) },
-            ],
-          },
-        ],
-      };
-      if (FALLBACK_MODELS.includes(model)) {
-        params.betas = ['server-side-fallback-2026-07-01'];
-        params.fallbacks = 'default';
-      }
-      let response;
-      try {
-        response = await client.beta.messages.create(params, { signal: signal });
-      } catch (e) {
-        if (signal && signal.aborted) throw { code: 'cancelled' };
-        if (e instanceof Anthropic.AuthenticationError) throw { code: 'bad_key' };
-        if (e instanceof Anthropic.PermissionDeniedError) throw { code: 'bad_key' };
-        if (e instanceof Anthropic.RateLimitError) throw { code: 'rate_limited' };
-        if (e instanceof Anthropic.BadRequestError) throw { code: 'bad_request', message: e.message };
-        if (e instanceof Anthropic.APIConnectionError) throw { code: 'offline' };
-        throw { code: 'upstream_error', message: e && e.message };
-      }
-      if (response.stop_reason === 'refusal') throw { code: 'refused' };
-      if (response.stop_reason === 'max_tokens') throw { code: 'invalid_json' };
-      const text = response.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('');
-      try {
-        reading = JSON.parse(text);
-      } catch (e) {
-        throw { code: 'invalid_json' };
-      }
+      reading = await readWithMistral(game, teams, file, signal);
     }
     return ST.normalizeReading(reading, game, participants);
+  }
+
+  /** Läser av med Claude via Anthropics SDK och egen API-nyckel. Fel kastas som { code }. */
+  async function readWithClaude(game, teams, file, signal) {
+    const Anthropic = window.AnthropicSDK.default || window.AnthropicSDK;
+    const client = new Anthropic({ apiKey: getApiKey('claude'), dangerouslyAllowBrowser: true });
+    const image = await imageToBase64(file);
+    const model = getModel('claude');
+    const params = {
+      model: model,
+      max_tokens: 16000,
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: ST.scoreboardSchema(game) } },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+            { type: 'text', text: ST.scoreboardPrompt(game, teams, false) },
+          ],
+        },
+      ],
+    };
+    if (FALLBACK_MODELS.includes(model)) {
+      params.betas = ['server-side-fallback-2026-07-01'];
+      params.fallbacks = 'default';
+    }
+    let response;
+    try {
+      response = await client.beta.messages.create(params, { signal: signal });
+    } catch (e) {
+      if (signal && signal.aborted) throw { code: 'cancelled' };
+      if (e instanceof Anthropic.AuthenticationError) throw { code: 'bad_key' };
+      if (e instanceof Anthropic.PermissionDeniedError) throw { code: 'bad_key' };
+      if (e instanceof Anthropic.RateLimitError) throw { code: 'rate_limited' };
+      if (e instanceof Anthropic.BadRequestError) throw { code: 'bad_request', message: e.message };
+      if (e instanceof Anthropic.APIConnectionError) throw { code: 'offline' };
+      throw { code: 'upstream_error', message: e && e.message };
+    }
+    if (response.stop_reason === 'refusal') throw { code: 'refused' };
+    if (response.stop_reason === 'max_tokens') throw { code: 'invalid_json' };
+    const text = response.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw { code: 'invalid_json' };
+    }
   }
 
   const AI_ERRORS = {
     no_ai: 'Automatisk avläsning är inte påslagen – fyll i siffrorna själv eller lägg till en API-nyckel under Mer.',
     bad_key: 'API-nyckeln fungerar inte. Kontrollera den under Mer → Spel & statistik.',
-    rate_limited: 'För många förfrågningar just nu. Vänta en stund och försök igen.',
+    rate_limited: 'För många avläsningar just nu. Vänta en minut och försök igen.',
     offline: 'Ingen internetanslutning – fyll i siffrorna själv.',
-    refused: 'Claude kunde inte läsa bilden. Prova en annan skärmbild eller fyll i själv.',
+    refused: 'Bilden kunde inte läsas av. Prova en annan skärmbild eller fyll i själv.',
     invalid_json: 'Avläsningen blev ofullständig. Försök igen eller fyll i själv.',
     image_rejected: 'Bilden kunde inte användas. Välj en JPEG- eller PNG-skärmbild.',
     not_granted: 'Du tillät inte att sidan använder Claude. Fyll i siffrorna själv.',
@@ -3531,7 +3730,7 @@
           .map((m) => {
             const teams = (m.teams || []).map((tm) => `${esc(tm.teamId ? pname(t, tm.teamId) : tm.name || '?')}${tm.score != null ? ' ' + fmt(tm.score) : ''}`).join(' – ');
             const top = ST.sortBoard(ST.leaderboard([m], game), game.stats[0].key)[0];
-            return `<li class="tap" data-action="editMap" data-id="${m.id}"><div class="grow"><div class="name">${esc(m.label || 'Karta')}${m.matchLabel ? ` <span class="small muted">· ${esc(m.matchLabel)}</span>` : ''}</div>
+            return `<li tabindex="0" role="button" class="tap" data-action="editMap" data-id="${m.id}"><div class="grow"><div class="name">${esc(m.label || 'Karta')}${m.matchLabel ? ` <span class="small muted">· ${esc(m.matchLabel)}</span>` : ''}</div>
               <div class="sub">${teams}${top ? ` · bäst: ${esc(top.name)} (${fmt(top.values[game.stats[0].key])} ${esc(game.stats[0].label)})` : ''}</div></div>${icon('edit')}</li>`;
           })
           .join('')}</ul>` : `<div class="empty">${icon('chart')}<h3>Inga kartor än</h3><div>Ladda upp en skärmbild av scoreboarden efter en karta. ${esc(game.hint)}</div></div>`}
@@ -3543,8 +3742,8 @@
       el.textContent = (r
         ? r.kind === 'sample'
           ? 'Bilder läses av med ditt Claude-konto. Du granskar siffrorna innan de sparas.'
-          : 'Bilder läses av med Claude via din API-nyckel. Du granskar siffrorna innan de sparas.'
-        : 'Automatisk avläsning är av: lägg till en Claude API-nyckel under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.') + tip;
+          : `Bilder läses av med ${PROVIDERS[r.kind].name} via din API-nyckel. Du granskar siffrorna innan de sparas.`
+        : 'Automatisk avläsning är av: lägg till en API-nyckel (Mistral är gratis) under Mer → Spel & statistik, eller fyll i siffrorna själv bredvid bilden.') + tip;
     });
     view.onclick = (e) => {
       const a = e.target.closest('[data-action]');
@@ -3713,9 +3912,10 @@
 
         async function read() {
           if (!file) return;
+          if (ctl) ctl.abort();
           ctl = new AbortController();
           const myCtl = ctl;
-          status = `<span class="spinner"></span> Claude läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
+          status = `<span class="spinner"></span> Läser av scoreboarden… <button class="btn small ghost" data-sb="stop">Stoppa</button>`;
           redraw();
           const ids = draft.teams.map((tm) => tm.teamId).filter(Boolean);
           const participants = participantInfo(t, ids.length ? ids : allIds);
@@ -3728,8 +3928,13 @@
             const unmatched = res.rows.filter((r) => r.name === r.ingame && !rosterNames().includes(r.name)).length;
             status = `✅ ${res.rows.length} spelare avlästa. Kontrollera siffrorna mot bilden innan du sparar.${unmatched ? ` ${unmatched} namn hittades inte i laguppställningen – rätta vid behov.` : ''}`;
           } catch (e) {
+            if (ctl !== myCtl) return; // en nyare avläsning har tagit över
             if (e && e.code === 'cancelled') status = 'Avläsningen stoppades.';
-            else status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
+            else {
+              status = '⚠️ ' + (AI_ERRORS[e && e.code] || 'Avläsningen misslyckades. Fyll i siffrorna själv.');
+              // Mistrals gratisplan ger vissa modeller 0 anrop per minut, så tipsa om rätt modell
+              if (e && e.code === 'rate_limited' && getProvider() === 'mistral') status += ' Fungerar det aldrig: använd modellen ministral-14b-latest, andra modeller ingår inte alltid i gratisplanen.';
+            }
           }
           ctl = null;
           redraw();
@@ -3830,9 +4035,10 @@
 
   function statsSettingsHtml(t) {
     const g = t.settings.game || 'none';
-    const key = getApiKey();
+    const prov = getProvider();
+    const key = getApiKey(prov);
     return `
-      <div class="section-title">Spel & statistik (${esc(t.name)})</div>
+      <div class="section-title">Spel & statistik</div>
       <section class="card">
         <label class="field"><span>Spel</span>
           <select id="setGame">
@@ -3848,12 +4054,18 @@
       </section>
       ${g !== 'none' ? `
       <section class="card">
-        <h3>Automatisk avläsning med Claude</h3>
-        <p class="small">I webbversionen på claude.ai läses bilderna av med ditt Claude-konto, utan nyckel. I Android-appen och i HTML-filen behövs en egen API-nyckel.</p>
-        <label class="field"><span>Claude API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="sk-ant-…" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
+        <h3>Automatisk avläsning</h3>
+        <div class="seg">
+          <button data-action="aiProvider" data-v="mistral" class="${prov === 'mistral' ? 'on' : ''}">Mistral (gratis)</button>
+          <button data-action="aiProvider" data-v="claude" class="${prov === 'claude' ? 'on' : ''}">Claude</button>
+        </div>
+        <p class="small">${prov === 'mistral'
+          ? 'Gratis men kräver en egen nyckel: skapa ett gratiskonto på console.mistral.ai och sedan en nyckel under API Keys.'
+          : 'Kostar lite per bild och kräver en egen nyckel från console.anthropic.com. I webbversionen på claude.ai används ditt Claude-konto, utan nyckel.'}</p>
+        <label class="field"><span>${PROVIDERS[prov].name} API-nyckel</span><input type="password" id="setApiKey" autocomplete="off" placeholder="Klistra in nyckeln" value="${key ? '••••••••' + esc(key.slice(-4)) : ''}"></label>
         <label class="field"><span>Modell</span><input type="text" id="setModel" value="${esc(getModel())}"></label>
         ${key ? `<button class="btn small danger-text ghost" data-action="clearKey">Ta bort nyckeln</button>` : ''}
-        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till Anthropic. Skapa en på console.anthropic.com. Med standardmodellen (claude-haiku-5-5) kostar en avläsning ungefär 1–2 öre; claude-opus-5-5 läser svår text bättre men kostar ca 40–70 öre per bild.</p>
+        <p class="small muted" style="margin:6px 0 0">Nyckeln sparas bara på den här enheten, följer inte med i säkerhetskopior och skickas bara till ${prov === 'mistral' ? 'Mistral. På gratisplanen får Mistral använda bilderna för att förbättra sina modeller, så ladda bara upp scoreboards.' : 'Anthropic. Med standardmodellen (claude-haiku-5-5) kostar en avläsning ungefär 1–2 öre; claude-opus-5-5 läser svår text bättre men kostar ca 40–70 öre per bild.'}</p>
       </section>` : ''}`;
   }
 
@@ -3961,13 +4173,13 @@
         const p = SG.PRESETS.find((x) => x.id === a.dataset.id);
         Object.assign(wz, { step: 2, preset: p, mode: p.mode || 'individual', roster: p.rosterSize || 5, game: p.game || 'none' });
         window.scrollTo(0, 0);
-        render();
+        smoothRender();
       } else if (act === 'back') {
         wz.step = 1;
-        render();
+        smoothRender();
       } else if (act === 'mode') {
         wz.mode = a.dataset.v;
-        render();
+        smoothRender();
       } else if (act === 'create') createFromWizard();
     };
     view.oninput = (e) => {
@@ -4014,9 +4226,17 @@
     if (b) setTab(b.dataset.tab);
   });
   $('#tournamentBtn').addEventListener('click', () => {
-    if (!ui.wizard) setTab('more');
+    if (!ui.wizard) tournamentSheet();
   });
   $('#timerChip').addEventListener('click', timerDialog);
+
+  // Rader som går att trycka på öppnas också med Enter eller mellanslag
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap[tabindex]')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
 
   // Bakåtknappen på Android: stäng dialog → gå till tabellen → avsluta
   window.appBack = function () {

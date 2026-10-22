@@ -233,3 +233,32 @@ test('utslagning med match om tredjepris och Bo-inställningar', () => {
   R = playAll(st);
   assert.deepEqual(R.placements.slice(0, 5), [['t1'], ['t2'], ['t3'], ['t4'], ['t5', 't6', 't7', 't8']]);
 });
+
+test('Swiss ger ingen deltagare mer än en walkover', () => {
+  for (const n of [9, 10, 11, 12, 14, 18, 19, 21]) {
+    const st = S.newStage('swiss');
+    S.start(st, teams(n));
+    const R = playAll(st);
+    const byes = {};
+    R.matches.filter((m) => m.state === 'bye').forEach((m) => (byes[m.a] = (byes[m.a] || 0) + 1));
+    assert.ok(Object.values(byes).every((c) => c === 1), `${n} deltagare: ${JSON.stringify(byes)}`);
+  }
+});
+
+test('startProblem stoppar GSL-grupper med fler än 4', () => {
+  const gsl = S.newStage('gsl');
+  gsl.cfg.groups = 2;
+  assert.match(S.startProblem(gsl, 16), /4/);
+  gsl.cfg.groups = 4;
+  assert.equal(S.startProblem(gsl, 16), '');
+  assert.match(S.startProblem(gsl, 17), /5 grupper/);
+});
+
+test('startProblem stoppar heat där ingen åker ut', () => {
+  const heats = S.newStage('heats');
+  Object.assign(heats.cfg, { heatSize: 4, advancePerHeat: 3 });
+  assert.match(S.startProblem(heats, 9), /åker ut/);
+  assert.match(S.startProblem(heats, 16), /åker ut/);
+  Object.assign(heats.cfg, { heatSize: 4, advancePerHeat: 2 });
+  for (const n of [5, 8, 9, 16, 30]) assert.equal(S.startProblem(heats, n), '', `${n} deltagare`);
+});
