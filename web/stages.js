@@ -339,10 +339,11 @@
   function swissRecords(stage, matches) {
     const cfg = stage.cfg;
     const rec = {};
-    stage.entrants.forEach((id) => (rec[id] = { id: id, w: 0, l: 0, opp: [], mf: 0, ma: 0 }));
+    stage.entrants.forEach((id) => (rec[id] = { id: id, w: 0, l: 0, opp: [], mf: 0, ma: 0, byes: 0 }));
     matches.forEach((m) => {
       if (m.state === 'bye') {
         rec[m.a].w++;
+        rec[m.a].byes++;
         return;
       }
       if (m.state !== 'done') return;
@@ -399,8 +400,15 @@
       carry = [];
       if (pool.length % 2 && ki < keys.length - 1) carry = [pool.pop()];
       // Högst seedad möter lägst seedad, utan returmöten om det går
-      const even = pool.length % 2 ? pool.slice(0, -1) : pool;
-      if (pool.length % 2) carry = [pool[pool.length - 1]];
+      // Udda i sista poolen: walkover till den lägst rankade som inte redan haft en
+      let even = pool;
+      if (pool.length % 2) {
+        let b = pool.length - 1;
+        while (b > 0 && pool[b].byes) b--;
+        if (pool[b].byes) b = pool.length - 1;
+        carry = [pool[b]];
+        even = pool.slice(0, b).concat(pool.slice(b + 1));
+      }
       (pairPool(even, false) || pairPool(even, true)).forEach((pr) => pairs.push(pr));
     });
     const matches = pairs.map(([a, b], i) => {
@@ -844,6 +852,30 @@
     });
   }
 
+  /** Felmeddelande om fasen inte kan startas med n deltagare, annars ''. */
+  function startProblem(st, n) {
+    const c = st.cfg;
+    if (st.type === 'heats') {
+      if (c.advancePerHeat >= c.heatSize) return 'Antal som går vidare måste vara mindre än heatstorleken';
+      // Samma indelning som progress(): varje omgång före finalen måste slå ut någon
+      let m = n;
+      while (m > c.heatSize) {
+        const count = Math.ceil(m / c.heatSize);
+        const small = Math.floor(m / count), big = Math.ceil(m / count), bigCount = m - small * count;
+        const next = bigCount * Math.min(big, c.advancePerHeat) + (count - bigCount) * Math.min(small, c.advancePerHeat);
+        if (next >= m) return `Med ${m} deltagare blir heaten så små att ingen åker ut – sänk antal som går vidare eller höj heatstorleken`;
+        m = next;
+      }
+    }
+    if (st.type === 'double' && n < 3) return 'Dubbelutslagning kräver minst 3 deltagare';
+    if (st.type === 'swiss' && n < 4) return 'Swiss kräver minst 4 deltagare';
+    if ((st.type === 'gsl' || st.type === 'rr') && c.groups < 1) return 'Minst 1 grupp';
+    if (st.type === 'gsl' && Math.ceil(n / Math.max(1, Math.min(c.groups, Math.ceil(n / 2)))) > 4) {
+      return `GSL-grupper har plats för högst 4 – välj minst ${Math.ceil(n / 4)} grupper`;
+    }
+    return '';
+  }
+
   const api = {
     TYPES: TYPES,
     PRESETS: PRESETS,
@@ -859,6 +891,7 @@
     setLobbyResult: setLobbyResult,
     splitLobbies: splitLobbies,
     progress: progress,
+    startProblem: startProblem,
     isLocked: isLocked,
     winsNeeded: winsNeeded,
     parsePoints: parsePoints,

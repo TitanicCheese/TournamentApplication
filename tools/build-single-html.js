@@ -18,7 +18,11 @@ const replaceOnce = (needle, replacement) => {
   html = html.replace(needle, () => replacement);
 };
 
-replaceOnce('<link rel="stylesheet" href="styles.css">', `<style>\n${read('styles.css')}\n</style>`);
+// Typsnitten bakas in som data-URL:er, och preload-länkarna till filerna tas bort
+const fontUri = (f) => 'data:font/woff2;base64,' + fs.readFileSync(path.join(dir, 'fonts', f)).toString('base64');
+const css = read('styles.css').replace(/url\(fonts\/([\w-]+\.woff2)\)/g, (m, f) => `url(${fontUri(f)})`);
+html = html.replace(/ *<link rel="preload" href="fonts\/[^"]+"[^>]*>\n/g, '');
+replaceOnce('<link rel="stylesheet" href="styles.css">', `<style>\n${css}\n</style>`);
 replaceOnce('<script src="logic.js"></script>', `<script>\n${safeJs(read('logic.js'))}\n</script>`);
 replaceOnce('<script src="stages.js"></script>', `<script>\n${safeJs(read('stages.js'))}\n</script>`);
 replaceOnce('<script src="stats.js"></script>', `<script>\n${safeJs(read('stats.js'))}\n</script>`);

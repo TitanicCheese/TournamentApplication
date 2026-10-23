@@ -136,3 +136,36 @@ test('lagtabell med förflyttning och slutspel mellan lag', () => {
   const po = L.createPlayoff(rows.map((r) => r.id));
   assert.equal(L.resolvePlayoff(po).rounds[0].matches[0].a, 'B');
 });
+
+test('importkontroll stoppar HTML-tecken i id:n, nycklar och siffervärden', () => {
+  const ok = { tournaments: { t1: { id: 't1', name: 'Höstligan', settings: { bestOf: 0 }, players: [{ id: 'p1', name: 'A' }], rounds: [{ id: 'r1', scores: { p1: 5 } }] } } };
+  assert.equal(L.findUnsafeImport(ok), null);
+
+  const attr = structuredClone(ok);
+  attr.tournaments.t1.settings.bestOf = '0" autofocus onfocus="alert(1)';
+  assert.equal(L.findUnsafeImport(attr), 'tournaments.t1.settings.bestOf');
+
+  const tag = structuredClone(ok);
+  tag.tournaments.t1.players[0].id = '<img src=x onerror=alert(1)>';
+  assert.equal(L.findUnsafeImport(tag), 'tournaments.t1.players.0.id');
+
+  const key = structuredClone(ok);
+  key.tournaments.t1.rounds[0].scores = { '"><svg onload=alert(1)>': 5 };
+  assert.match(L.findUnsafeImport(key), /^tournaments\.t1\.rounds\.0\.scores\./);
+});
+
+test('importkontroll släpper igenom fritext med citattecken och &', () => {
+  const data = {
+    tournaments: {
+      t1: {
+        id: 't1',
+        name: 'Kalle & Co "cupen"',
+        settings: { customStats: "K/D, O'Brien-poäng", customGameName: '<Mitt spel>', quickValues: '1, 2' },
+        players: [{ id: 'p1', name: "O'Brien", members: ['Ann & Bo', '"Zed"'] }],
+        stages: [{ matches: [{ id: 'm1', label: 'Final <Bo5>', note: 'avbruten "regn"', winner: null }] }],
+        statMaps: [{ id: 's1', label: "Karta 'Ascent'", matchLabel: 'A & B', rows: [{ name: 'Zed <3', stats: { s0: 12 } }] }],
+      },
+    },
+  };
+  assert.equal(L.findUnsafeImport(data), null);
+});
