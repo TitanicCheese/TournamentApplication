@@ -2240,7 +2240,7 @@
       case 'gsl':
         return `${c.groups} grupper · topp ${c.advancePerGroup} vidare · ${boText(c.bo)}`;
       case 'rr':
-        return `${c.groups} ${c.groups === 1 ? 'grupp' : 'grupper'} · topp ${c.advancePerGroup} vidare · ${boText(c.bo)} · ${c.pointsWin}/${c.pointsDraw}/${c.pointsLoss} p${c.doubleRound ? ' · dubbelmöten' : ''}`;
+        return `${c.perTeam > 0 ? `Cirkel (${c.perTeam} matcher per lag) · ` : ''}${c.groups} ${c.groups === 1 ? 'grupp' : 'grupper'} · topp ${c.advancePerGroup} vidare · ${boText(c.bo)} · ${c.pointsWin}/${c.pointsDraw}/${c.pointsLoss} p${c.doubleRound ? ' · dubbelmöten' : ''}`;
       case 'swiss':
         return `${c.winsToAdvance} vinster vidare · ${c.lossesToElim} förluster ute · ${boText(c.bo)}, avgörande ${boText(c.decisiveBo)}`;
       case 'single':
@@ -2483,6 +2483,7 @@
       case 'rr':
         f += `<div class="cfg-grid">${cfgField(i, 'groups', 'Antal grupper', c.groups, { min: 1 })}${cfgField(i, 'advancePerGroup', 'Vidare per grupp', c.advancePerGroup, { min: 0 })}</div>`;
         f += cfgField(i, 'bo', 'Matcher', c.bo, { bo: true });
+        f += cfgField(i, 'perTeam', 'Matcher per lag (0 = alla möter alla, 2 = cirkel)', c.perTeam || 0);
         f += `<div class="cfg-grid three">${cfgField(i, 'pointsWin', 'Poäng vinst', c.pointsWin)}${cfgField(i, 'pointsDraw', 'Oavgjort', c.pointsDraw)}${cfgField(i, 'pointsLoss', 'Förlust', c.pointsLoss)}</div>`;
         f += cfgField(i, 'allowDraw', 'Tillåt oavgjort', c.allowDraw, { check: true }) + cfgField(i, 'doubleRound', 'Mötas två gånger (hemma/borta)', c.doubleRound, { check: true });
         if (n) hint = `${n} ${W(t).one} → ${c.groups} ${c.groups === 1 ? 'grupp' : 'grupper'} om ca ${Math.ceil(n / c.groups)}.`;
@@ -3866,6 +3867,7 @@
     champions: 'trophy',
     major: 'shuffle',
     mariokart: 'dice',
+    circle: 'shuffle',
     'groups-playoff': 'people',
     single: 'trophy',
     double: 'trophy',

@@ -236,11 +236,29 @@
     return rounds;
   }
 
+  /**
+   * Cirkel: lagen står i en ring och möter sina närmaste grannar (1–2, 2–3 … 5–1).
+   * perTeam = antal matcher per lag. Delas upp i omgångar där ingen spelar två gånger.
+   */
+  function circlePairs(ids, perTeam) {
+    const n = ids.length;
+    const pairs = [];
+    for (let d = 1; d <= Math.floor(perTeam / 2) && d < n / 2; d++) for (let i = 0; i < n; i++) pairs.push([ids[i], ids[(i + d) % n]]);
+    if (perTeam % 2 && n % 2 === 0) for (let i = 0; i < n / 2; i++) pairs.push([ids[i], ids[i + n / 2]]);
+    const rounds = [];
+    pairs.forEach((pr) => {
+      let r = rounds.find((rd) => rd.every(([a, b]) => a !== pr[0] && a !== pr[1] && b !== pr[0] && b !== pr[1]));
+      if (!r) rounds.push((r = []));
+      r.push(pr);
+    });
+    return rounds;
+  }
+
   function buildRr(entrants, cfg) {
     const groups = L.makeGroups(entrants.slice(), Math.max(1, Math.min(cfg.groups, Math.floor(entrants.length / 2) || 1)), 'snake');
     const matches = [];
     groups.forEach((g, gi) => {
-      const rounds = roundRobinPairs(g);
+      const rounds = cfg.perTeam > 0 && cfg.perTeam < g.length - 1 ? circlePairs(g, cfg.perTeam) : roundRobinPairs(g);
       const all = cfg.doubleRound ? rounds.concat(rounds.map((r) => r.map(([a, b]) => [b, a]))) : rounds;
       all.forEach((pairs, ri) =>
         pairs.forEach(([a, b], mi) => matches.push({ id: `g${gi}-r${ri}-${mi}`, group: gi, round: ri, a: a, b: b, bo: cfg.bo, label: `Omgång ${ri + 1}` }))
@@ -794,6 +812,16 @@
       ],
     },
     {
+      id: 'circle',
+      name: 'Cirkel + final',
+      desc: 'Lagen står i en ring och möter sina två grannar (5 lag = 5 matcher). Topp 2 möts i final.',
+      mode: 'team',
+      stages: [
+        { type: 'rr', name: 'Cirkel', cfg: { groups: 1, advancePerGroup: 2, bo: 1, perTeam: 2 } },
+        { type: 'single', name: 'Final', cfg: { bo: 1, semiBo: 1, finalBo: 3 } },
+      ],
+    },
+    {
       id: 'groups-playoff',
       name: 'Gruppspel + slutspel',
       desc: 'Alla möter alla i grupper, de bästa går till utslagning.',
@@ -836,6 +864,7 @@
     parsePoints: parsePoints,
     groupLetter: groupLetter,
     roundRobinPairs: roundRobinPairs,
+    circlePairs: circlePairs,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

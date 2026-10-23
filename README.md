@@ -37,6 +37,7 @@ Välj format när du skapar en turnering (eller under **Format / Mer → Byt for
 | **Valorant Champions** | 16 lag i 4 GSL-grupper (Bo3, dubbelutslagning i gruppen), topp 2 till dubbelutslaget slutspel (Bo3, undre final och final Bo5) – som Champions Shanghai |
 | **CS Major** | Swiss-fas (Bo1, avgörande matcher Bo3), 3 vinster vidare / 3 förluster ute, topp 8 till utslagning |
 | **Mario Kart** | Poängfas i slumpade 1v1v1v1-lobbyer där spelets poäng skrivs in (max 60, valfritt antal omgångar). De X bästa (standard 8) går till heat om 4 där topp 2 går vidare till en final |
+| **Cirkel + final** | Lagen står i en ring och möter sina två grannar (5 lag = 5 matcher). Topp 2 möts i final (Bo3). "Matcher per lag" finns som inställning i gruppspel |
 | **Gruppspel + slutspel** | Alla möter alla i grupper, de bästa till utslagning |
 | **Utslagning / Dubbelutslagning** | Direkt till slutspelsträd |
 | **Anpassat** | Bygg eget format fas för fas |

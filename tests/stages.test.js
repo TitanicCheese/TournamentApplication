@@ -233,3 +233,17 @@ test('utslagning med match om tredjepris och Bo-inställningar', () => {
   R = playAll(st);
   assert.deepEqual(R.placements.slice(0, 5), [['t1'], ['t2'], ['t3'], ['t4'], ['t5', 't6', 't7', 't8']]);
 });
+
+test('Cirkel + final: 5 lag, 2 matcher per lag, topp 2 till final', () => {
+  const [rr, fin] = S.stagesFromPreset(S.PRESETS.find((p) => p.id === 'circle'));
+  S.start(rr, teams(5));
+  let R = S.resolve(rr);
+  assert.equal(R.matches.length, 5);
+  const count = {};
+  R.matches.forEach((m) => [m.a, m.b].forEach((x) => (count[x] = (count[x] || 0) + 1)));
+  assert.ok(Object.values(count).every((c) => c === 2));
+  R = playAll(rr);
+  assert.deepEqual(R.qualifiers, ['t1', 't2']);
+  S.start(fin, R.qualifiers);
+  assert.equal(playAll(fin).champion, 't1');
+});
